@@ -2,12 +2,13 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, Paperclip, TrendingUp, Loader2, SlidersHorizontal } from 'lucide-react';
+import { MessageSquare, Paperclip, TrendingUp, Loader2, SlidersHorizontal, Filter, X, ChevronDown } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useAuthStore } from '../stores/authStore';
 import { Avatar, Badge, VoteControl } from '../components/UI';
 import { MarkdownContent } from '../components/MarkdownContent';
 import NewIdeaModal from '../components/NewIdeaModal';
+import { getStatusLabel } from '../lib/statusHelpers';
 
 export default function Dashboard() {
   const { t } = useTranslation('dashboard');
@@ -17,6 +18,8 @@ export default function Dashboard() {
   const ideasLoadingMore = useAppStore(s => s.ideasLoadingMore);
   const loadMoreIdeas = useAppStore(s => s.loadMoreIdeas);
   const statuses = useAppStore(s => s.statusList);
+  const selectedStatus = useAppStore(s => s.selectedStatus);
+  const setSelectedStatus = useAppStore(s => s.setSelectedStatus);
   const categories = useAppStore(s => s.categories);
   const viewMode = useAppStore(s => s.viewMode);
   const vote = useAppStore(s => s.vote);
@@ -47,7 +50,7 @@ export default function Dashboard() {
   }, [ideas]);
 
   const [sortBy, setSortBy] = useState('newest');
-  const [sortOpen, setSortOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const sortOptions = [
     { id: 'newest', label: t('newest') },
@@ -146,57 +149,175 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Sort bar */}
+      {/* Filter & Sort toggle + active selections */}
       <div style={{ marginBottom: 16 }}>
-        <button
-          onClick={() => setSortOpen(!sortOpen)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 14px',
-            borderRadius: 'var(--radius-full)',
-            border: `1px solid ${sortBy !== 'newest' ? 'var(--primary-300)' : 'var(--border-default)'}`,
-            background: sortBy !== 'newest' ? 'var(--primary-50)' : 'var(--bg-primary)',
-            color: sortBy !== 'newest' ? 'var(--primary-700)' : 'var(--text-secondary)',
-            fontSize: '0.8125rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-            transition: 'all 150ms',
-          }}
-        >
-          <SlidersHorizontal size={14} />
-          {t('sortBy', { label: sortOptions.find(o => o.id === sortBy)?.label })}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {/* Toggle button */}
+          <button
+            onClick={() => setFilterOpen(!filterOpen)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 14px',
+              borderRadius: 'var(--radius-full)',
+              border: `1px solid ${filterOpen ? 'var(--primary-300)' : 'var(--border-default)'}`,
+              background: filterOpen ? 'color-mix(in srgb, var(--primary-500) 8%, var(--bg-secondary))' : 'var(--bg-primary)',
+              color: filterOpen ? 'var(--primary-500)' : 'var(--text-secondary)',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 150ms',
+            }}
+          >
+            <Filter size={14} />
+            {t('filterAndSort')}
+            <motion.span
+              animate={{ rotate: filterOpen ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+              style={{ display: 'flex' }}
+            >
+              <ChevronDown size={14} />
+            </motion.span>
+          </button>
+
+          {/* Active selections next to the button */}
+          {selectedStatus !== 'all' && (() => {
+            const activeStatus = statuses.find(s => s.id === selectedStatus);
+            return activeStatus ? (
+              <span style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '4px 10px', borderRadius: 'var(--radius-full)',
+                background: `color-mix(in srgb, ${activeStatus.color} 12%, var(--bg-secondary))`,
+                border: `1px solid ${activeStatus.color}`,
+                fontSize: '0.75rem', fontWeight: 600, color: activeStatus.color,
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: activeStatus.color }} />
+                {getStatusLabel(activeStatus)}
+                <button
+                  onClick={() => setSelectedStatus('all')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: activeStatus.color, padding: 0, display: 'flex', marginLeft: 2 }}
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ) : null;
+          })()}
+          {sortBy !== 'newest' && (
+            <span style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '4px 10px', borderRadius: 'var(--radius-full)',
+              background: 'color-mix(in srgb, var(--primary-500) 10%, var(--bg-secondary))',
+              border: '1px solid var(--primary-300)',
+              fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary-500)',
+            }}>
+              <SlidersHorizontal size={11} />
+              {sortOptions.find(o => o.id === sortBy)?.label}
+              <button
+                onClick={() => setSortBy('newest')}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-500)', padding: 0, display: 'flex', marginLeft: 2 }}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          )}
+        </div>
+
+        {/* Collapsible panel */}
         <AnimatePresence>
-          {sortOpen && (
+          {filterOpen && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              transition={{ duration: 0.2 }}
               style={{ overflow: 'hidden' }}
             >
-              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                {sortOptions.map(opt => (
-                  <button
-                    key={opt.id}
-                    onClick={() => { setSortBy(opt.id); setSortOpen(false); }}
-                    style={{
-                      padding: '5px 14px',
-                      borderRadius: 'var(--radius-full)',
-                      border: `1px solid ${sortBy === opt.id ? 'var(--primary-300)' : 'var(--border-default)'}`,
-                      background: sortBy === opt.id ? 'var(--primary-50)' : 'var(--bg-primary)',
-                      color: sortBy === opt.id ? 'var(--primary-700)' : 'var(--text-secondary)',
-                      fontSize: '0.75rem',
-                      fontWeight: sortBy === opt.id ? 600 : 500,
-                      cursor: 'pointer',
-                      transition: 'all 150ms',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+              <div style={{
+                marginTop: 10, padding: '14px 16px',
+                background: 'var(--bg-secondary)',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--border-default)',
+                display: 'flex', flexDirection: 'column', gap: 14,
+              }}>
+                {/* Status filter */}
+                <div>
+                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, display: 'block' }}>
+                    {t('status')}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => setSelectedStatus('all')}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: 'var(--radius-full)',
+                        border: `1px solid ${selectedStatus === 'all' ? 'var(--primary-300)' : 'var(--border-default)'}`,
+                        background: selectedStatus === 'all' ? 'color-mix(in srgb, var(--primary-500) 10%, var(--bg-primary))' : 'var(--bg-primary)',
+                        color: selectedStatus === 'all' ? 'var(--primary-500)' : 'var(--text-secondary)',
+                        fontSize: '0.75rem',
+                        fontWeight: selectedStatus === 'all' ? 600 : 500,
+                        cursor: 'pointer',
+                        transition: 'all 150ms',
+                      }}
+                    >
+                      {t('allStatuses')}
+                    </button>
+                    {statuses.map(status => (
+                      <button
+                        key={status.id}
+                        onClick={() => setSelectedStatus(status.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 5,
+                          padding: '5px 12px',
+                          borderRadius: 'var(--radius-full)',
+                          border: `1px solid ${selectedStatus === status.id ? status.color : 'var(--border-default)'}`,
+                          background: selectedStatus === status.id ? `color-mix(in srgb, ${status.color} 12%, var(--bg-primary))` : 'var(--bg-primary)',
+                          color: selectedStatus === status.id ? status.color : 'var(--text-secondary)',
+                          fontSize: '0.75rem',
+                          fontWeight: selectedStatus === status.id ? 600 : 500,
+                          cursor: 'pointer',
+                          transition: 'all 150ms',
+                        }}
+                      >
+                        <span style={{
+                          width: 7, height: 7, borderRadius: '50%',
+                          background: status.color, flexShrink: 0,
+                        }} />
+                        {getStatusLabel(status)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sort options */}
+                <div>
+                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, display: 'block' }}>
+                    {t('sort')}
+                  </span>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {sortOptions.map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => setSortBy(opt.id)}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: 'var(--radius-full)',
+                          border: `1px solid ${sortBy === opt.id ? 'var(--primary-300)' : 'var(--border-default)'}`,
+                          background: sortBy === opt.id ? 'color-mix(in srgb, var(--primary-500) 10%, var(--bg-primary))' : 'var(--bg-primary)',
+                          color: sortBy === opt.id ? 'var(--primary-500)' : 'var(--text-secondary)',
+                          fontSize: '0.75rem',
+                          fontWeight: sortBy === opt.id ? 600 : 500,
+                          cursor: 'pointer',
+                          transition: 'all 150ms',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
@@ -244,7 +365,7 @@ export default function Dashboard() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                   {status && (
                     <Badge color={status.color} bg={status.bg} dot>
-                      {status.label}
+                      {getStatusLabel(status)}
                     </Badge>
                   )}
                   {cat && cat.id !== 'all' && (

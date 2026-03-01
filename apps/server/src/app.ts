@@ -10,7 +10,9 @@ import authPlugin from './plugins/auth.js';
 import emailPlugin from './plugins/email.js';
 import storagePlugin from './plugins/storage.js';
 import websocketPlugin from './plugins/websocket.js';
+import redisPlugin from './plugins/redis.js';
 import pgNotifyPlugin from './plugins/pg-notify.js';
+import redisSubscriberPlugin from './plugins/redis-subscriber.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { uploadRoutes } from './routes/upload.js';
@@ -52,11 +54,13 @@ export async function buildApp() {
 
   // Plugins
   await fastify.register(prismaPlugin);
+  await fastify.register(redisPlugin);
   await fastify.register(authPlugin);
   await fastify.register(emailPlugin);
   await fastify.register(storagePlugin);
   await fastify.register(websocketPlugin);
   await fastify.register(pgNotifyPlugin);
+  await fastify.register(redisSubscriberPlugin);
 
   // REST Routes
   await fastify.register(healthRoutes);
@@ -65,22 +69,22 @@ export async function buildApp() {
   await fastify.register(settingsRoutes);
 
   // Process expired development surveys on startup and periodically
+  // Only the leader instance runs this in multi-instance mode
   fastify.addHook('onReady', async () => {
-    try {
-      await processExpiredDevelopmentSurveys(fastify);
-      fastify.log.info('Processed expired development surveys on startup');
-    } catch (err) {
-      fastify.log.error(err, 'Failed to process expired development surveys');
-    }
-
-    // Run periodically every 60 seconds
-    const interval = setInterval(async () => {
+    const runIfLeader = async () => {
+      if (!fastify.isLeader()) return;
       try {
         await processExpiredDevelopmentSurveys(fastify);
       } catch (err) {
-        fastify.log.error(err, 'Failed to process expired development surveys (periodic)');
+        fastify.log.error(err, 'Failed to process expired development surveys');
       }
-    }, 60_000);
+    };
+
+    await runIfLeader();
+    fastify.log.info('Survey processor initialized (runs on leader only)');
+
+    // Run periodically every 5 minutes
+    const interval = setInterval(runIfLeader, 300_000);
 
     fastify.addHook('onClose', async () => {
       clearInterval(interval);

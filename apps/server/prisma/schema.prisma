@@ -165,6 +165,7 @@ model Comment {
   likes   CommentLike[]
 
   @@index([ideaId])
+  @@index([parentId])
   @@map("comments")
 }
 
@@ -218,6 +219,8 @@ model Survey {
   options      SurveyOption[]
   ratings      SurveyRating[]
 
+  @@index([dueDate])
+  @@index([isActive])
   @@map("surveys")
 }
 
@@ -231,6 +234,7 @@ model SurveyOption {
   idea   Idea?        @relation(fields: [ideaId], references: [id])
   votes  SurveyVote[]
 
+  @@index([surveyId])
   @@map("survey_options")
 }
 
@@ -243,6 +247,7 @@ model SurveyVote {
   user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([optionId, userId])
+  @@index([optionId])
   @@map("survey_votes")
 }
 

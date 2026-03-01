@@ -37,6 +37,7 @@ const actionHandlers: Record<string, ActionHandler> = {
   [WS_ACTIONS.COMMENTS_DELETE]: handleComments.delete,
   [WS_ACTIONS.COMMENTS_LIKE]: handleComments.like,
   [WS_ACTIONS.COMMENTS_UNLIKE]: handleComments.unlike,
+  [WS_ACTIONS.COMMENTS_LIST_REPLIES]: handleComments.listReplies,
 
   [WS_ACTIONS.SURVEYS_LIST]: handleSurveys.list,
   [WS_ACTIONS.SURVEYS_CREATE]: handleSurveys.create,
@@ -74,6 +75,25 @@ const actionHandlers: Record<string, ActionHandler> = {
 
   [WS_ACTIONS.PREFERENCES_GET]: handlePreferences.get,
   [WS_ACTIONS.PREFERENCES_UPDATE]: handlePreferences.update,
+
+  [WS_ACTIONS.SUBSCRIBE]: async (_fastify, connId, _id, payload) => {
+    const channels = payload['channels'] as string[] | undefined;
+    if (Array.isArray(channels)) {
+      for (const ch of channels) {
+        if (typeof ch === 'string') connectionManager.subscribe(connId, ch);
+      }
+    }
+    return { subscribed: channels ?? [] };
+  },
+  [WS_ACTIONS.UNSUBSCRIBE]: async (_fastify, connId, _id, payload) => {
+    const channels = payload['channels'] as string[] | undefined;
+    if (Array.isArray(channels)) {
+      for (const ch of channels) {
+        if (typeof ch === 'string') connectionManager.unsubscribe(connId, ch);
+      }
+    }
+    return { unsubscribed: channels ?? [] };
+  },
 };
 
 export async function handleMessage(

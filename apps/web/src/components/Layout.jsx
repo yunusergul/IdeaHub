@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutGrid, Bug, Sparkles, Heart, RefreshCw, Shield,
   BarChart3, Settings, ClipboardList, Plus, Bell, Search,
-  Menu, X, LogOut, ChevronDown, LayoutList, Grid3X3, Columns3
+  Menu, X, LogOut, ChevronDown, LayoutList, Grid3X3, Columns3,
+  Lightbulb, Rocket, Target, Star, Folder, Globe, Code, Package, Megaphone, Zap
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../stores/appStore';
@@ -12,7 +13,7 @@ import { useAuthStore } from '../stores/authStore';
 import { Avatar, IconButton, SearchInput, Badge } from './UI';
 import ConnectionStatus from './ConnectionStatus';
 
-const categoryIcons = { LayoutGrid, Bug, Sparkles, Heart, RefreshCw, Shield };
+const categoryIcons = { LayoutGrid, Bug, Sparkles, Heart, RefreshCw, Shield, Lightbulb, Rocket, Target, Star, Folder, Globe, Code, Package, Megaphone, Zap };
 const MOBILE_BREAKPOINT = 768;
 
 function useIsMobile() {
@@ -213,7 +214,18 @@ export default function Layout() {
           >
             <SearchInput
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchQuery(val);
+                if (val.trim()) {
+                  const path = location.pathname;
+                  if (path.includes('/idea/')) {
+                    navigate('/dashboard');
+                  } else if (path.includes('/surveys/')) {
+                    navigate('/dashboard/surveys');
+                  }
+                }
+              }}
               placeholder={t('searchPlaceholder')}
             />
           </div>

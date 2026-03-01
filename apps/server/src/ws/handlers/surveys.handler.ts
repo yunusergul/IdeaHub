@@ -20,6 +20,17 @@ const surveyInclude = {
 export async function processExpiredDevelopmentSurveys(fastify: FastifyInstance): Promise<void> {
   const now = new Date();
 
+  // Quick guard: skip expensive query if no expired surveys exist
+  const expiredCount = await fastify.prisma.survey.count({
+    where: {
+      type: 'development',
+      isActive: true,
+      transitionedAt: null,
+      dueDate: { lt: now },
+    },
+  });
+  if (expiredCount === 0) return;
+
   const expiredSurveys = await fastify.prisma.survey.findMany({
     where: {
       type: 'development',
@@ -30,8 +41,8 @@ export async function processExpiredDevelopmentSurveys(fastify: FastifyInstance)
     include: {
       options: {
         include: {
-          votes: true,
           idea: true,
+          _count: { select: { votes: true } },
         },
       },
     },
@@ -39,11 +50,11 @@ export async function processExpiredDevelopmentSurveys(fastify: FastifyInstance)
 
   for (const survey of expiredSurveys) {
     // Find the option with the most votes
-    let winningOption = survey.options[0];
+    let winningOption: typeof survey.options[0] | undefined;
     let maxVotes = 0;
     for (const opt of survey.options) {
-      if (opt.votes.length > maxVotes) {
-        maxVotes = opt.votes.length;
+      if (opt._count.votes > maxVotes) {
+        maxVotes = opt._count.votes;
         winningOption = opt;
       }
     }

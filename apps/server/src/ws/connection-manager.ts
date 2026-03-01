@@ -7,11 +7,14 @@ const MAX_CONNECTIONS_PER_USER = 5;
 const RATE_LIMIT_WINDOW_MS = 10_000;
 const RATE_LIMIT_MAX_MESSAGES = 30;
 
+export const INSTANCE_ID = randomUUID();
+
 interface Connection {
   socket: WebSocket;
   userId?: string;
   role?: string;
   messageTimestamps: number[];
+  subscriptions: Set<string>;
 }
 
 class ConnectionManager {
@@ -26,7 +29,7 @@ class ConnectionManager {
       return null;
     }
     const id = randomUUID();
-    this.connections.set(id, { socket, messageTimestamps: [] });
+    this.connections.set(id, { socket, messageTimestamps: [], subscriptions: new Set() });
     return id;
   }
 
@@ -95,7 +98,11 @@ class ConnectionManager {
     }
   }
 
-  broadcastAll(message: WsServerMessage): void {
+  /**
+   * Broadcast to all authenticated connections on THIS process only.
+   * In a multi-instance setup, use Redis pub/sub to reach other processes.
+   */
+  broadcastLocal(message: WsServerMessage): void {
     const str = JSON.stringify(message);
     for (const [, conn] of this.connections) {
       if (conn.userId && conn.socket.readyState === 1) {
@@ -104,10 +111,57 @@ class ConnectionManager {
     }
   }
 
+  /**
+   * Alias for broadcastLocal. In single-instance mode, this reaches all clients.
+   * In multi-instance mode, use Redis pub/sub + broadcastLocal on each instance.
+   */
+  broadcastAll(message: WsServerMessage): void {
+    this.broadcastLocal(message);
+  }
+
   broadcastToUser(userId: string, message: WsServerMessage): void {
     const str = JSON.stringify(message);
     for (const [, conn] of this.connections) {
       if (conn.userId === userId && conn.socket.readyState === 1) {
+        conn.socket.send(str);
+      }
+    }
+  }
+
+  subscribe(connId: string, channel: string): void {
+    const conn = this.connections.get(connId);
+    if (conn) conn.subscriptions.add(channel);
+  }
+
+  unsubscribe(connId: string, channel: string): void {
+    const conn = this.connections.get(connId);
+    if (conn) conn.subscriptions.delete(channel);
+  }
+
+  /**
+   * Broadcast to all authenticated connections subscribed to a specific channel.
+   * If no connections have any subscriptions at all, falls back to broadcastLocal
+   * (backward compatibility for clients that haven't adopted subscriptions yet).
+   */
+  broadcastToChannel(channel: string, message: WsServerMessage): void {
+    // Check if any connection has subscriptions enabled
+    let anySubscriptions = false;
+    for (const [, conn] of this.connections) {
+      if (conn.subscriptions.size > 0) {
+        anySubscriptions = true;
+        break;
+      }
+    }
+
+    // If no client has subscribed to anything yet, fall back to broadcast all
+    if (!anySubscriptions) {
+      this.broadcastLocal(message);
+      return;
+    }
+
+    const str = JSON.stringify(message);
+    for (const [, conn] of this.connections) {
+      if (conn.userId && conn.socket.readyState === 1 && conn.subscriptions.has(channel)) {
         conn.socket.send(str);
       }
     }

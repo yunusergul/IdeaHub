@@ -10,8 +10,8 @@ declare module 'fastify' {
 
 export default fp(async (fastify: FastifyInstance) => {
   const databaseUrl = new URL(process.env['DATABASE_URL'] ?? '');
-  databaseUrl.searchParams.set('connection_limit', '20');
-  databaseUrl.searchParams.set('pool_timeout', '10');
+  databaseUrl.searchParams.set('connection_limit', '50');
+  databaseUrl.searchParams.set('pool_timeout', '15');
 
   const prisma = new PrismaClient({
     datasourceUrl: databaseUrl.toString(),

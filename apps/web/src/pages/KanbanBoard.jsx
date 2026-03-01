@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -7,6 +7,7 @@ import { useAppStore } from '../stores/appStore';
 import { useAuthStore } from '../stores/authStore';
 import { Avatar } from '../components/UI';
 import SprintAssignModal from '../components/SprintAssignModal';
+import { getStatusLabel } from '../lib/statusHelpers';
 
 function daysAgo(dateStr, t) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -64,11 +65,42 @@ const chipStyle = (active) => ({
   transition: 'all 150ms',
 });
 
+function KanbanColumnSentinel({ statusId, loading, onIntersect }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !loading) {
+          onIntersect(statusId);
+        }
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [statusId, loading, onIntersect]);
+
+  return (
+    <div ref={ref} style={{ padding: 8, textAlign: 'center' }}>
+      {loading && (
+        <span style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>...</span>
+      )}
+    </div>
+  );
+}
+
 export default function KanbanBoard() {
   const { t } = useTranslation('kanban');
   const kanbanIdeas = useAppStore(s => s.kanbanIdeas);
   const fallbackIdeas = useAppStore(s => s.ideas);
   const fetchKanbanIdeas = useAppStore(s => s.fetchKanbanIdeas);
+  const fetchKanbanIdeasForStatus = useAppStore(s => s.fetchKanbanIdeasForStatus);
+  const kanbanColumnHasMore = useAppStore(s => s.kanbanColumnHasMore);
+  const kanbanColumnLoading = useAppStore(s => s.kanbanColumnLoading);
   const initialized = useAppStore(s => s.initialized);
   const ideas = kanbanIdeas.length > 0 ? kanbanIdeas : fallbackIdeas;
   const searchQuery = useAppStore(s => s.searchQuery);
@@ -119,7 +151,9 @@ export default function KanbanBoard() {
       const q = searchQuery.toLowerCase();
       result = result.filter(i =>
         i.title.toLowerCase().includes(q) ||
-        (i.summary || '').toLowerCase().includes(q)
+        (i.summary || '').toLowerCase().includes(q) ||
+        (i.content || '').toLowerCase().includes(q) ||
+        (i.author?.name || '').toLowerCase().includes(q)
       );
     }
     return result;
@@ -142,7 +176,7 @@ export default function KanbanBoard() {
     if (total === 0) return { stages: [], completedPct: 0, total: 0 };
 
     // Find "completed" status - check by label or by last order
-    const completedStatus = statuses.find(s => s.label === 'Tamamlandı');
+    const completedStatus = statuses.find(s => s.id === 'completed');
     const completedId = completedStatus?.id;
     const completedCount = filteredIdeas.filter(i => getStatusId(i) === completedId).length;
     const completedPct = Math.round((completedCount / total) * 100);
@@ -187,7 +221,7 @@ export default function KanbanBoard() {
   };
 
   // Find "in-progress" status by label
-  const inProgressStatus = statuses.find(s => s.label === 'Geliştiriliyor');
+  const inProgressStatus = statuses.find(s => s.id === 'in-progress');
   const inProgressId = inProgressStatus?.id;
 
   const handleDrop = (e, statusId) => {
@@ -517,7 +551,7 @@ export default function KanbanBoard() {
                         color: stage.count > 0 ? stage.color : 'var(--text-tertiary)',
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       }}>
-                        {stage.label}
+                        {getStatusLabel(stage)}
                       </span>
                       <span style={{
                         marginLeft: 'auto', fontSize: '0.6875rem', fontWeight: 700,
@@ -581,7 +615,7 @@ export default function KanbanBoard() {
                     fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.8125rem',
                     color: 'var(--text-primary)', letterSpacing: '-0.01em',
                   }}>
-                    {status.label}
+                    {getStatusLabel(status)}
                   </span>
                   <span style={{
                     marginLeft: 'auto', fontSize: '0.75rem', fontWeight: 600,
@@ -684,7 +718,7 @@ export default function KanbanBoard() {
                       </div>
 
                       {/* Sprint'e Al button for approved ideas */}
-                      {getStatusId(idea) === statuses.find(s => s.label === 'Onaylandı')?.id && isManager && (
+                      {getStatusId(idea) === 'approved' && isManager && (
                         <button
                           onClick={(e) => { e.stopPropagation(); setSprintAssignIdea(idea); }}
                           style={{
@@ -745,6 +779,15 @@ export default function KanbanBoard() {
                     </motion.div>
                   );
                 })}
+
+                {/* Infinite scroll sentinel */}
+                {kanbanColumnHasMore[status.id] && (
+                  <KanbanColumnSentinel
+                    statusId={status.id}
+                    loading={kanbanColumnLoading[status.id]}
+                    onIntersect={fetchKanbanIdeasForStatus}
+                  />
+                )}
 
                 {columnIdeas.length === 0 && (
                   <div style={{

@@ -13,6 +13,7 @@ import { Avatar, Badge, VoteControl, Button, ConfirmDialog, useConfirm } from '.
 import { MarkdownContent } from '../components/MarkdownContent';
 import SurveyModal from '../components/SurveyModal';
 import { useTranslation } from 'react-i18next';
+import { getStatusLabel } from '../lib/statusHelpers';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -200,7 +201,7 @@ export default function IdeaDetail() {
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                    {status && <Badge color={status.color} bg={status.bg} dot>{status.label}</Badge>}
+                    {status && <Badge color={status.color} bg={status.bg} dot>{getStatusLabel(status)}</Badge>}
                     {category && category.id !== 'all' && (
                       <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-display)', fontWeight: 500 }}>
                         {category.label}
@@ -443,7 +444,7 @@ export default function IdeaDetail() {
                   <div key={step.id} className="timeline__item">
                     <div className={`timeline__dot ${isCurrent ? 'timeline__dot--active' : isPast ? 'timeline__dot--completed' : ''}`} />
                     <p className="timeline__label" style={{ color: isCurrent ? 'var(--primary-600)' : isPast ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>
-                      {step.label}
+                      {getStatusLabel(step)}
                     </p>
                     {(isCurrent || isPast) && (
                       <p className="timeline__date">{formatDate(idea.createdAt)}</p>

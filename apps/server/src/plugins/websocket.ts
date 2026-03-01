@@ -11,6 +11,10 @@ export default fp(async (fastify: FastifyInstance) => {
   await fastify.register(websocket, {
     options: {
       maxPayload: MAX_PAYLOAD_BYTES,
+      perMessageDeflate: {
+        zlibDeflateOptions: { level: 6 },
+        threshold: 1024, // Only compress messages larger than 1KB
+      },
     },
   });
 

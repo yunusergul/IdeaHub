@@ -41,5 +41,21 @@
   "actions": "İşlem",
   "update": "Güncelle",
   "connect": "Bağlan",
-  "disconnect": "Bağlantıyı Kes"
+  "disconnect": "Bağlantıyı Kes",
+  "statuses": {
+    "pending": "Bekliyor",
+    "reviewing": "İnceleniyor",
+    "approved": "Onaylandı",
+    "in-progress": "Geliştiriliyor",
+    "completed": "Tamamlandı",
+    "rejected": "Reddedildi"
+  },
+  "statusDescriptions": {
+    "pending": "Yeni gönderilen fikirler burada bekler.",
+    "reviewing": "Yöneticiler tarafından değerlendiriliyor.",
+    "approved": "Onaylandı, sprint ataması bekleniyor.",
+    "in-progress": "Sprint'e atandı, aktif geliştirme aşamasında.",
+    "completed": "Geliştirme tamamlandı ve yayınlandı.",
+    "rejected": "Değerlendirme sonucu reddedildi."
+  }
 }

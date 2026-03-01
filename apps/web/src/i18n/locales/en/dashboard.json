@@ -7,5 +7,10 @@
   "newest": "Newest",
   "oldest": "Oldest",
   "mostVoted": "Most Voted",
-  "mostCommented": "Most Commented"
+  "mostCommented": "Most Commented",
+  "allStatuses": "All",
+  "filterAndSort": "Filter & Sort",
+  "status": "Status",
+  "sort": "Sort",
+  "loading": "Loading..."
 }

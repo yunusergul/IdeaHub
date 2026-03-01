@@ -41,5 +41,21 @@
   "actions": "Actions",
   "update": "Update",
   "connect": "Connect",
-  "disconnect": "Disconnect"
+  "disconnect": "Disconnect",
+  "statuses": {
+    "pending": "Pending",
+    "reviewing": "Reviewing",
+    "approved": "Approved",
+    "in-progress": "In Development",
+    "completed": "Completed",
+    "rejected": "Rejected"
+  },
+  "statusDescriptions": {
+    "pending": "Newly submitted ideas wait here.",
+    "reviewing": "Being evaluated by managers.",
+    "approved": "Approved, awaiting sprint assignment.",
+    "in-progress": "Assigned to sprint, actively in development.",
+    "completed": "Development complete and released.",
+    "rejected": "Rejected after evaluation."
+  }
 }

@@ -55,33 +55,35 @@ export const useWsStore = create((set) => {
 // Setup event routing from wsClient to appStore
 // Called once from App.jsx after all stores are imported
 export function setupEventRouting(appStore) {
-  // Sync user locale on auth:ok
+  // Sync user locale on auth:ok and subscribe to default channels
   wsClient.on('auth:ok', (user) => {
     if (user?.locale && i18n.language !== user.locale) {
       i18n.changeLanguage(user.locale);
     }
+    // Subscribe to core channels for real-time updates
+    wsClient.subscribe(['ideas', 'surveys', 'sprints', 'statuses']).catch(() => {});
   });
 
   wsClient.on('idea:created', (data) => {
-    wsClient.send('ideas:get', { ideaId: data.id }).then(idea => {
-      appStore.getState()._prependIdea(idea);
-      // Also update kanban ideas
-      const state = appStore.getState();
-      if (state.kanbanIdeas.length > 0) {
-        appStore.setState({ kanbanIdeas: [idea, ...state.kanbanIdeas.filter(i => i.id !== idea.id)] });
-      }
-    }).catch(() => {});
+    const idea = data.entity;
+    if (!idea) return;
+    appStore.getState()._prependIdea(idea);
+    // Also update kanban ideas
+    const state = appStore.getState();
+    if (state.kanbanIdeas.length > 0) {
+      appStore.setState({ kanbanIdeas: [idea, ...state.kanbanIdeas.filter(i => i.id !== idea.id)] });
+    }
   });
 
   wsClient.on('idea:updated', (data) => {
-    wsClient.send('ideas:get', { ideaId: data.id }).then(idea => {
-      appStore.getState()._updateIdea(idea);
-      // Also update kanban ideas
-      const state = appStore.getState();
-      if (state.kanbanIdeas.length > 0) {
-        appStore.setState({ kanbanIdeas: state.kanbanIdeas.map(i => i.id === idea.id ? idea : i) });
-      }
-    }).catch(() => {});
+    const idea = data.entity;
+    if (!idea) return;
+    appStore.getState()._updateIdea(idea);
+    // Also update kanban ideas
+    const state = appStore.getState();
+    if (state.kanbanIdeas.length > 0) {
+      appStore.setState({ kanbanIdeas: state.kanbanIdeas.map(i => i.id === idea.id ? idea : i) });
+    }
   });
 
   wsClient.on('idea:deleted', (data) => {
@@ -94,22 +96,18 @@ export function setupEventRouting(appStore) {
   });
 
   wsClient.on('vote:changed', (data) => {
-    wsClient.send('ideas:get', { ideaId: data.id }).then(idea => {
-      appStore.getState()._updateIdea(idea);
-      // Also update kanban ideas
-      const state = appStore.getState();
-      if (state.kanbanIdeas.length > 0) {
-        appStore.setState({ kanbanIdeas: state.kanbanIdeas.map(i => i.id === idea.id ? idea : i) });
-      }
-    }).catch(() => {});
+    const idea = data.entity;
+    if (!idea) return;
+    appStore.getState()._updateIdea(idea);
+    // Also update kanban ideas
+    const state = appStore.getState();
+    if (state.kanbanIdeas.length > 0) {
+      appStore.setState({ kanbanIdeas: state.kanbanIdeas.map(i => i.id === idea.id ? idea : i) });
+    }
   });
 
   wsClient.on('comment:created', (data) => {
-    if (data.ideaId) {
-      wsClient.send('ideas:get', { ideaId: data.ideaId }).then(idea => {
-        appStore.getState()._updateIdea(idea);
-      }).catch(() => {});
-    }
+    // Comment count is updated via idea:updated event from PG trigger
   });
 
   wsClient.on('notification:new', (data) => {

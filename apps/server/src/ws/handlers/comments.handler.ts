@@ -7,14 +7,21 @@ import { createNotification } from '../../services/notification.service.js';
 const commentInclude = {
   user: { select: { id: true, name: true, initials: true, department: true } },
   likes: { select: { userId: true } },
+  _count: { select: { replies: true } },
   replies: {
+    take: 50,
+    orderBy: { createdAt: 'asc' as const },
     include: {
       user: { select: { id: true, name: true, initials: true, department: true } },
       likes: { select: { userId: true } },
+      _count: { select: { replies: true } },
       replies: {
+        take: 50,
+        orderBy: { createdAt: 'asc' as const },
         include: {
           user: { select: { id: true, name: true, initials: true, department: true } },
           likes: { select: { userId: true } },
+          _count: { select: { replies: true } },
         },
       },
     },
@@ -32,6 +39,32 @@ export const handleComments = {
     });
 
     return comments;
+  },
+
+  async listReplies(fastify: FastifyInstance, _connId: string, _id: string, payload: Record<string, unknown>) {
+    const parentId = payload['parentId'] as string;
+    const cursor = payload['cursor'] as string | undefined;
+    const limit = Math.min(Number(payload['limit']) || 20, 50);
+
+    const replies = await fastify.prisma.comment.findMany({
+      where: { parentId },
+      include: {
+        user: { select: { id: true, name: true, initials: true, department: true } },
+        likes: { select: { userId: true } },
+        _count: { select: { replies: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+
+    const hasMore = replies.length > limit;
+    const items = hasMore ? replies.slice(0, limit) : replies;
+    const nextCursor = hasMore && items.length > 0
+      ? items[items.length - 1]!.id
+      : null;
+
+    return { items, hasMore, nextCursor };
   },
 
   async create(fastify: FastifyInstance, connId: string, _id: string, payload: Record<string, unknown>) {

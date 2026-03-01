@@ -92,6 +92,7 @@ export const WS_ACTIONS = {
   COMMENTS_DELETE: 'comments:delete',
   COMMENTS_LIKE: 'comments:like',
   COMMENTS_UNLIKE: 'comments:unlike',
+  COMMENTS_LIST_REPLIES: 'comments:listReplies',
 
   // Surveys
   SURVEYS_LIST: 'surveys:list',
@@ -138,6 +139,10 @@ export const WS_ACTIONS = {
   // Preferences
   PREFERENCES_GET: 'preferences:get',
   PREFERENCES_UPDATE: 'preferences:update',
+
+  // Subscriptions (selective broadcasting)
+  SUBSCRIBE: 'subscribe',
+  UNSUBSCRIBE: 'unsubscribe',
 } as const;
 
 // --- Event Names ---

@@ -10,6 +10,7 @@ class WsClient {
     this._tokenGetter = null; // function that returns current token
     this._tokenRefresher = null; // function that triggers a token refresh
     this.pendingRequests = new Map();
+    this._inflightDedup = new Map(); // key: action+payload → promise (deduplication)
     this.eventListeners = new Map();
     this.stateListeners = new Set();
     this.state = 'disconnected'; // disconnected | connected | reconnecting | failed
@@ -138,6 +139,19 @@ class WsClient {
   }
 
   send(action, payload = {}) {
+    // Deduplicate identical concurrent requests (same action + payload)
+    const dedupKey = action + ':' + JSON.stringify(payload);
+    const inflight = this._inflightDedup.get(dedupKey);
+    if (inflight) return inflight;
+
+    const promise = this._sendRaw(action, payload).finally(() => {
+      this._inflightDedup.delete(dedupKey);
+    });
+    this._inflightDedup.set(dedupKey, promise);
+    return promise;
+  }
+
+  _sendRaw(action, payload = {}) {
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error('No WebSocket connection'));
@@ -179,6 +193,16 @@ class WsClient {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: 'auth', token: newToken }));
     }
+  }
+
+  subscribe(channels) {
+    if (!Array.isArray(channels) || channels.length === 0) return Promise.resolve();
+    return this.send('subscribe', { channels });
+  }
+
+  unsubscribe(channels) {
+    if (!Array.isArray(channels) || channels.length === 0) return Promise.resolve();
+    return this.send('unsubscribe', { channels });
   }
 
   disconnect() {

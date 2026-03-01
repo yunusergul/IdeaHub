@@ -55,6 +55,7 @@ export const useAppStore = create((set, get) => ({
 
   // UI state (some persisted)
   selectedCategory: 'all',
+  selectedStatus: 'all',
   searchQuery: '',
   viewMode: 'feed',
   theme: initTheme(),
@@ -122,13 +123,14 @@ export const useAppStore = create((set, get) => ({
   // --- Data fetching ---
 
   fetchInitialData: async () => {
-    const { initialized, selectedCategory, searchQuery } = get();
+    const { initialized, selectedCategory, selectedStatus, searchQuery } = get();
     if (initialized) return;
     set({ loading: true, error: null, initialized: true });
 
     try {
       const ideasPayload = { offset: 0, limit: 20 };
       if (selectedCategory !== 'all') ideasPayload.categoryId = selectedCategory;
+      if (selectedStatus !== 'all') ideasPayload.statusId = selectedStatus;
       if (searchQuery) ideasPayload.search = searchQuery;
 
       const [ideasData, categoriesData, statusesData, notifData, surveysData, rulesData, sprintsData, settingsData] = await Promise.all([
@@ -194,12 +196,13 @@ export const useAppStore = create((set, get) => ({
   // --- Pagination ---
 
   loadMoreIdeas: async () => {
-    const { ideas, ideasHasMore, ideasLoadingMore, selectedCategory, searchQuery } = get();
+    const { ideas, ideasHasMore, ideasLoadingMore, selectedCategory, selectedStatus, searchQuery } = get();
     if (!ideasHasMore || ideasLoadingMore) return;
     set({ ideasLoadingMore: true });
     try {
       const payload = { offset: ideas.length, limit: 20 };
       if (selectedCategory !== 'all') payload.categoryId = selectedCategory;
+      if (selectedStatus !== 'all') payload.statusId = selectedStatus;
       if (searchQuery) payload.search = searchQuery;
       const data = await _send('ideas:list', payload);
       const items = data?.items ?? data;
@@ -219,11 +222,12 @@ export const useAppStore = create((set, get) => ({
   },
 
   resetAndRefetchIdeas: async () => {
-    const { selectedCategory, searchQuery } = get();
+    const { selectedCategory, selectedStatus, searchQuery } = get();
     set({ ideasLoadingMore: true });
     try {
       const payload = { offset: 0, limit: 20 };
       if (selectedCategory !== 'all') payload.categoryId = selectedCategory;
+      if (selectedStatus !== 'all') payload.statusId = selectedStatus;
       if (searchQuery) payload.search = searchQuery;
       const data = await _send('ideas:list', payload);
       const items = data?.items ?? data;
@@ -292,6 +296,48 @@ export const useAppStore = create((set, get) => ({
       set({ kanbanIdeas: Array.isArray(items) ? items : [] });
     } catch (err) {
       console.error('Failed to fetch kanban ideas:', err);
+    }
+  },
+
+  // Paginated kanban loading per status column (50 ideas per load)
+  kanbanColumnOffsets: {},
+  kanbanColumnHasMore: {},
+  kanbanColumnLoading: {},
+
+  fetchKanbanIdeasForStatus: async (statusId, reset = false) => {
+    const { kanbanColumnOffsets, kanbanColumnHasMore, kanbanColumnLoading } = get();
+    if (kanbanColumnLoading[statusId]) return;
+    if (!reset && kanbanColumnHasMore[statusId] === false) return;
+
+    const offset = reset ? 0 : (kanbanColumnOffsets[statusId] || 0);
+    const limit = 50;
+
+    set({ kanbanColumnLoading: { ...get().kanbanColumnLoading, [statusId]: true } });
+
+    try {
+      const data = await _send('ideas:list', { statusId, offset, limit });
+      const items = data?.items ?? data;
+      const total = data?.total ?? 0;
+
+      if (!Array.isArray(items)) return;
+
+      set(s => {
+        const existingIds = new Set(reset ? [] : s.kanbanIdeas.filter(i => (i.status?.id || i.statusId) === statusId).map(i => i.id));
+        const newItems = items.filter(i => !existingIds.has(i.id));
+        const kanbanIdeas = reset
+          ? [...s.kanbanIdeas.filter(i => (i.status?.id || i.statusId) !== statusId), ...items]
+          : [...s.kanbanIdeas, ...newItems];
+
+        return {
+          kanbanIdeas,
+          kanbanColumnOffsets: { ...s.kanbanColumnOffsets, [statusId]: offset + items.length },
+          kanbanColumnHasMore: { ...s.kanbanColumnHasMore, [statusId]: offset + items.length < total },
+          kanbanColumnLoading: { ...s.kanbanColumnLoading, [statusId]: false },
+        };
+      });
+    } catch (err) {
+      console.error(`Failed to fetch kanban ideas for status ${statusId}:`, err);
+      set({ kanbanColumnLoading: { ...get().kanbanColumnLoading, [statusId]: false } });
     }
   },
 
@@ -525,6 +571,10 @@ export const useAppStore = create((set, get) => ({
 
   setSelectedCategory: (cat) => {
     set({ selectedCategory: cat });
+    get().resetAndRefetchIdeas();
+  },
+  setSelectedStatus: (statusId) => {
+    set({ selectedStatus: statusId });
     get().resetAndRefetchIdeas();
   },
   setSearchQuery: (q) => {

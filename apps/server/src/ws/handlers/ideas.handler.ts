@@ -4,7 +4,7 @@ import { connectionManager } from '../connection-manager.js';
 import { AppError } from '../../lib/errors.js';
 import { createNotification } from '../../services/notification.service.js';
 
-const ideaInclude = {
+export const ideaInclude = {
   author: { select: { id: true, name: true, email: true, department: true, role: true, initials: true } },
   category: true,
   status: true,
@@ -27,6 +27,8 @@ export const handleIdeas = {
       where['OR'] = [
         { title: { contains: search, mode: 'insensitive' } },
         { summary: { contains: search, mode: 'insensitive' } },
+        { content: { contains: search, mode: 'insensitive' } },
+        { author: { name: { contains: search, mode: 'insensitive' } } },
       ];
     }
 

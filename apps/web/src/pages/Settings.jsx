@@ -4,7 +4,9 @@ import {
   User, Tags, Users, Zap, Link2, Plus, Trash2, Edit3, Save,
   Moon, Sun, Monitor, Bell, Smartphone, Shield, ExternalLink,
   ChevronRight, Check, X, Calendar, Play, Pause,
-  Palette, GripVertical, Mail
+  Palette, GripVertical, Mail,
+  LayoutGrid, Bug, Sparkles, Heart, RefreshCw,
+  Lightbulb, Rocket, Target, Star, Folder, Globe, Code, Package, Megaphone
 } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useAuthStore } from '../stores/authStore';
@@ -12,6 +14,7 @@ import { Button, Avatar, Badge, Toggle } from '../components/UI';
 import { toast } from '../stores/toastStore';
 import { INTEGRATION_DEFS } from '../lib/integrations';
 import { useTranslation } from 'react-i18next';
+import { getStatusLabel, getStatusDescription } from '../lib/statusHelpers';
 
 const tabDefs = [
   { id: 'profile', icon: User },
@@ -669,39 +672,43 @@ function CategoriesTab() {
     setCats(categories.filter(c => c.id !== 'all'));
   }, [categories]);
   const [newCatName, setNewCatName] = useState('');
+  const [newCatColor, setNewCatColor] = useState('#6366f1');
+  const [newCatIcon, setNewCatIcon] = useState('LayoutGrid');
+  const categoryIconMap = {
+    LayoutGrid, Bug, Sparkles, Heart, RefreshCw, Shield,
+    Lightbulb, Rocket, Target, Star, Folder, Globe, Code, Package, Megaphone, Zap,
+  };
   const [newStatusName, setNewStatusName] = useState('');
   const [newStatusColor, setNewStatusColor] = useState('#6366f1');
   const [newStatusDesc, setNewStatusDesc] = useState('');
-  const [newStatusAfter, setNewStatusAfter] = useState('');
 
   const addCategory = () => {
     if (!newCatName.trim()) return;
-    setCats(prev => [...prev, { id: `cat-${Date.now()}`, label: newCatName, icon: 'LayoutGrid', color: '#6366f1' }]);
+    setCats(prev => [...prev, { id: `cat-${Date.now()}`, label: newCatName, icon: newCatIcon, color: newCatColor }]);
     setNewCatName('');
+    setNewCatColor('#6366f1');
+    setNewCatIcon('LayoutGrid');
   };
 
   const removeCategory = (id) => setCats(prev => prev.filter(c => c.id !== id));
 
   const handleAddStatus = () => {
-    if (!newStatusName.trim() || !newStatusAfter) return;
-    const afterOrder = parseInt(newStatusAfter, 10);
+    if (!newStatusName.trim()) return;
+    const lastOrder = flowStatuses.length > 0 ? Math.max(...flowStatuses.map(s => s.order)) : 0;
     contextAddStatus({
       label: newStatusName,
       color: newStatusColor,
       bg: newStatusColor + '15',
       description: newStatusDesc || '',
       isSystem: false,
-    }, afterOrder);
+    }, lastOrder);
     setNewStatusName('');
     setNewStatusDesc('');
-    setNewStatusAfter('');
   };
 
   // Separate flow statuses (ordered) from special statuses
   const flowStatuses = contextStatuses.filter(s => s.order > 0).sort((a, b) => (a.order || 0) - (b.order || 0));
   const specialStatuses = contextStatuses.filter(s => s.order === 0);
-  // Insertable positions: after each flow status
-  const insertPositions = flowStatuses.filter(s => s.order < Math.max(...flowStatuses.map(f => f.order)));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -719,7 +726,8 @@ function CategoriesTab() {
               borderRadius: 'var(--radius-md)',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: cat.color }} />
+                {(() => { const CatIcon = categoryIconMap[cat.icon] || LayoutGrid; return <CatIcon size={16} style={{ color: cat.color, flexShrink: 0 }} />; })()}
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: cat.color, flexShrink: 0 }} />
                 <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>{cat.label}</span>
               </div>
               <button
@@ -731,16 +739,46 @@ function CategoriesTab() {
             </div>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="color"
+            value={newCatColor}
+            onChange={(e) => setNewCatColor(e.target.value)}
+            style={{ width: 40, height: 38, padding: 2, cursor: 'pointer', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-md)', background: 'var(--bg-primary)' }}
+          />
           <input
             type="text"
             value={newCatName}
             onChange={(e) => setNewCatName(e.target.value)}
             placeholder={t('categories.newCatPlaceholder')}
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: 140 }}
             onKeyDown={(e) => e.key === 'Enter' && addCategory()}
           />
           <Button variant="primary" size="md" icon={Plus} onClick={addCategory}>{t('common:add')}</Button>
+        </div>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 10 }}>
+          {Object.entries(categoryIconMap).map(([name, Icon]) => (
+            <button
+              key={name}
+              onClick={() => setNewCatIcon(name)}
+              title={name}
+              style={{
+                width: 34, height: 34,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: 'var(--radius-md)',
+                border: newCatIcon === name
+                  ? `2px solid ${newCatColor}`
+                  : '1.5px solid var(--border-default)',
+                background: newCatIcon === name
+                  ? `color-mix(in srgb, ${newCatColor} 12%, var(--bg-secondary))`
+                  : 'var(--bg-primary)',
+                cursor: 'pointer',
+                transition: 'all 150ms',
+              }}
+            >
+              <Icon size={16} style={{ color: newCatIcon === name ? newCatColor : 'var(--text-tertiary)' }} />
+            </button>
+          ))}
         </div>
       </div>
 
@@ -767,11 +805,12 @@ function CategoriesTab() {
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '6px 12px', borderRadius: 'var(--radius-full)',
-                background: st.bg, border: `1.5px solid ${st.color}30`,
+                background: `color-mix(in srgb, ${st.color} 12%, var(--bg-secondary))`,
+                border: `1.5px solid color-mix(in srgb, ${st.color} 25%, transparent)`,
               }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: st.color, flexShrink: 0 }} />
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: st.color, whiteSpace: 'nowrap' }}>
-                  {st.label}
+                  {getStatusLabel(st)}
                 </span>
                 <span style={{
                   fontSize: '0.5625rem', fontWeight: 700, color: 'var(--text-tertiary)',
@@ -831,10 +870,10 @@ function CategoriesTab() {
                     gap: 12,
                     padding: '12px 14px',
                     background: isDragged
-                      ? 'var(--primary-50)'
+                      ? 'color-mix(in srgb, var(--primary-500) 12%, var(--bg-secondary))'
                       : isDropTarget
-                        ? 'var(--primary-50)'
-                        : st.bg,
+                        ? 'color-mix(in srgb, var(--primary-500) 15%, var(--bg-secondary))'
+                        : `color-mix(in srgb, ${st.color} 8%, var(--bg-secondary))`,
                     borderRadius: 'var(--radius-md)',
                     borderLeft: `3px solid ${st.color}`,
                     cursor: 'grab',
@@ -854,7 +893,8 @@ function CategoriesTab() {
                   </div>
                   <div style={{
                     width: 28, height: 28, borderRadius: 'var(--radius-sm)',
-                    background: st.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: `color-mix(in srgb, ${st.color} 15%, var(--bg-tertiary))`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                     flexShrink: 0, marginTop: 1,
                   }}>
                     <div style={{ width: 10, height: 10, borderRadius: '50%', background: st.color }} />
@@ -862,7 +902,7 @@ function CategoriesTab() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                       <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {st.label}
+                        {getStatusLabel(st)}
                       </span>
                       <span style={{
                         fontSize: '0.625rem', fontWeight: 700, color: 'var(--text-tertiary)',
@@ -881,20 +921,22 @@ function CategoriesTab() {
                         </span>
                       ) : (
                         <span style={{
-                          fontSize: '0.5625rem', fontWeight: 600, color: 'var(--primary-600)',
-                          border: '1px solid var(--primary-200)', padding: '1px 5px',
-                          borderRadius: 'var(--radius-full)', background: 'var(--primary-50)',
+                          fontSize: '0.5625rem', fontWeight: 600, color: 'var(--primary-500)',
+                          border: '1px solid color-mix(in srgb, var(--primary-500) 30%, transparent)',
+                          padding: '1px 5px',
+                          borderRadius: 'var(--radius-full)',
+                          background: 'color-mix(in srgb, var(--primary-500) 10%, var(--bg-secondary))',
                         }}>
                           {t('categories.custom')}
                         </span>
                       )}
                     </div>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.4 }}>
-                      {st.description || t('categories.noDesc')}
+                      {getStatusDescription(st) || t('categories.noDesc')}
                     </p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                    <Badge color={st.color} bg={st.bg} dot>{st.label}</Badge>
+                    <Badge color={st.color} bg={`color-mix(in srgb, ${st.color} 12%, var(--bg-secondary))`} dot>{getStatusLabel(st)}</Badge>
                     {!st.isSystem && (
                       <button
                         onClick={() => contextRemoveStatus(st.id)}
@@ -923,7 +965,8 @@ function CategoriesTab() {
             }}>
               <div style={{
                 width: 28, height: 28, borderRadius: 'var(--radius-sm)',
-                background: st.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: `color-mix(in srgb, ${st.color} 15%, var(--bg-tertiary))`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
                 flexShrink: 0, marginTop: 1,
               }}>
                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: st.color }} />
@@ -931,7 +974,7 @@ function CategoriesTab() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                   <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    {st.label}
+                    {getStatusLabel(st)}
                   </span>
                   <span style={{
                     fontSize: '0.5625rem', fontWeight: 600, color: 'var(--text-tertiary)',
@@ -942,11 +985,11 @@ function CategoriesTab() {
                   </span>
                 </div>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.4 }}>
-                  {st.description || t('categories.noDesc')}
+                  {getStatusDescription(st) || t('categories.noDesc')}
                 </p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                <Badge color={st.color} bg={st.bg} dot>{st.label}</Badge>
+                <Badge color={st.color} bg={`color-mix(in srgb, ${st.color} 12%, var(--bg-secondary))`} dot>{getStatusLabel(st)}</Badge>
               </div>
             </div>
           ))}
@@ -967,22 +1010,6 @@ function CategoriesTab() {
               onChange={(e) => setNewStatusColor(e.target.value)}
               style={{ width: 40, height: 38, padding: 2, cursor: 'pointer', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-md)' }}
             />
-          </div>
-          <div className="form-group" style={{ minWidth: 160, marginBottom: 0 }}>
-            <label className="form-label">{t('categories.afterWhich')}</label>
-            <select
-              className="form-select"
-              value={newStatusAfter}
-              onChange={(e) => setNewStatusAfter(e.target.value)}
-              style={{ width: '100%' }}
-            >
-              <option value="">{t('categories.selectPosition')}</option>
-              {flowStatuses.map(s => (
-                <option key={s.id} value={s.order}>
-                  {t('categories.afterLabel', { order: s.order, label: s.label })}
-                </option>
-              ))}
-            </select>
           </div>
           <div className="form-group" style={{ flex: 1, minWidth: 130, marginBottom: 0 }}>
             <label className="form-label">{t('categories.statusName')}</label>

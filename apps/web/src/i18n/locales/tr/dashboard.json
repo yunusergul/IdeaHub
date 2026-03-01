@@ -7,5 +7,10 @@
   "newest": "En Yeni",
   "oldest": "En Eski",
   "mostVoted": "En Çok Oylanan",
-  "mostCommented": "En Çok Yorumlanan"
+  "mostCommented": "En Çok Yorumlanan",
+  "allStatuses": "Tümü",
+  "filterAndSort": "Filtrele ve Sırala",
+  "status": "Durum",
+  "sort": "Sıralama",
+  "loading": "Yükleniyor..."
 }
