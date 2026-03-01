@@ -34,19 +34,22 @@ IdeaHub is a full-stack, real-time collaborative platform for managing ideas fro
 
 ## Features
 
-- **Real-time Collaboration** — WebSocket-first architecture with PostgreSQL LISTEN/NOTIFY broadcasting
+- **Real-time Collaboration** — WebSocket-first architecture with PostgreSQL LISTEN/NOTIFY + Redis Pub/Sub broadcasting
 - **Idea Management** — Create, categorize, and track ideas through customizable status workflows
 - **Weighted Voting** — Configurable voting rules with per-category/department multipliers
-- **Kanban Board** — Visual drag-and-drop workflow for idea progression
+- **Kanban Board** — Visual drag-and-drop workflow with per-column lazy loading and sprint/time filters
 - **Sprint Planning** — Time-boxed development cycles with idea assignment
 - **Surveys & Polls** — Multi-format surveys (polls, ratings) with auto-transitions
-- **Threaded Comments** — Nested discussions with like reactions and mentions
+- **Threaded Comments** — Nested discussions with like reactions, cursor-based pagination for replies
 - **Role-Based Access** — Admin, Product Manager, and User roles with granular permissions
 - **Notifications** — Real-time in-app + email notifications with user preferences
 - **File Attachments** — S3-compatible storage (MinIO / AWS S3)
 - **Internationalization** — Turkish and English language support
 - **Theming** — Light, Dark, and System (OS-follow) themes with custom color palettes
 - **Markdown Support** — Rich text rendering in idea descriptions and comments
+- **Horizontal Scaling** — Redis-backed multi-instance support with leader election and PM2 cluster mode
+- **Selective Broadcasting** — Clients subscribe to channels for efficient WS message delivery
+- **Request Deduplication** — Prevents duplicate in-flight WebSocket requests
 
 ## Architecture
 
@@ -61,7 +64,7 @@ ideahub/
 │   │   │   ├── services/    # Business logic (notifications)
 │   │   │   ├── lib/         # Utilities (JWT, password, storage, logger)
 │   │   │   └── i18n/        # Server-side translations
-│   │   └── prisma/          # Schema, migrations, seed
+│   │   └── prisma/          # Schema, migrations, seeds (dev + prod)
 │   │
 │   └── web/                 # React 19 frontend (JSX)
 │       └── src/
@@ -87,11 +90,13 @@ ideahub/
 | **Frontend** | React 19, Vite 7, Zustand, React Router 7, Framer Motion, Lucide Icons |
 | **Backend** | Fastify 5, TypeScript 5.8, Prisma 6.8, Zod |
 | **Database** | PostgreSQL 17 |
-| **Real-time** | WebSocket + PG LISTEN/NOTIFY |
+| **Real-time** | WebSocket + PG LISTEN/NOTIFY + Redis Pub/Sub |
+| **Caching** | Redis 7 (optional, for multi-instance scaling) |
 | **Storage** | MinIO (S3-compatible) / Local filesystem |
 | **Email** | Nodemailer + MailHog (dev) |
 | **Auth** | JWT (15min access + 7d refresh with rotation) |
 | **Monorepo** | Turborepo + npm workspaces |
+| **Process** | PM2 cluster mode (multi-instance) |
 | **Infra** | Docker Compose |
 
 ## Prerequisites
@@ -118,6 +123,7 @@ docker compose up -d
 
 This starts:
 - **PostgreSQL 17** on port `5432`
+- **Redis 7** on port `6379`
 - **MailHog** on ports `1025` (SMTP) / `8025` (Web UI)
 - **MinIO** on ports `9000` (API) / `9001` (Console)
 
@@ -125,7 +131,19 @@ This starts:
 
 ```bash
 npm run db:migrate    # Run Prisma migrations
-npm run db:seed       # Populate seed data
+npm run db:seed       # Populate seed data (dev mode)
+```
+
+The seed system supports two modes:
+- **Dev** (default): Creates 8 sample users, 58 ideas with real comments/votes, surveys, and notifications
+- **Prod**: Creates only an admin user with default categories and statuses
+
+```bash
+# Dev seed (default)
+npm run db:seed
+
+# Production seed
+SEED_MODE=prod npm run db:seed
 ```
 
 ### 4. Configure Environment
@@ -147,6 +165,13 @@ This starts both the backend and frontend in development mode via Turborepo.
 | MailHog UI | http://localhost:8025 |
 | MinIO Console | http://localhost:9001 |
 
+**Default Logins:**
+
+| Mode | Email | Password |
+|------|-------|----------|
+| Dev | `elif.kaya@sirket.com` | `password123` |
+| Prod | `admin@ideahub.com` | `Qazxsw123**` |
+
 ## Scripts
 
 | Command | Description |
@@ -155,7 +180,8 @@ This starts both the backend and frontend in development mode via Turborepo.
 | `npm run build` | Build all packages |
 | `npm run lint` | Lint all packages |
 | `npm run db:migrate` | Create and run Prisma migrations |
-| `npm run db:seed` | Seed database with test data |
+| `npm run db:seed` | Seed database with dev data |
+| `SEED_MODE=prod npm run db:seed` | Seed database with prod data (admin only) |
 | `npm run db:reset` | Reset database and re-seed |
 
 ## API Protocol

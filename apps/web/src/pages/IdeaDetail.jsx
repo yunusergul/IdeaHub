@@ -39,7 +39,18 @@ export default function IdeaDetail() {
 
   const loading = useAppStore(s => s.loading);
   const initialized = useAppStore(s => s.initialized);
-  const idea = ideas.find(i => i.id === id);
+  const kanbanIdeas = useAppStore(s => s.kanbanIdeas);
+  const [fetchedIdea, setFetchedIdea] = useState(null);
+  const idea = ideas.find(i => i.id === id) || kanbanIdeas.find(i => i.id === id) || fetchedIdea;
+
+  // Fetch idea from backend if not found in any store
+  useEffect(() => {
+    if (id && send && initialized && !ideas.find(i => i.id === id) && !kanbanIdeas.find(i => i.id === id)) {
+      send('ideas:get', { ideaId: id }).then(data => {
+        if (data) setFetchedIdea(data);
+      }).catch(() => {});
+    }
+  }, [id, send, initialized, ideas, kanbanIdeas]);
 
   // Fetch comments (re-run when idea becomes available after page refresh)
   useEffect(() => {
