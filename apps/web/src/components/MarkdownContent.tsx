@@ -6,7 +6,7 @@ marked.setOptions({
   gfm: true,
 });
 
-function sanitizeHtml(html) {
+function sanitizeHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
@@ -16,10 +16,15 @@ function sanitizeHtml(html) {
     .replace(/javascript\s*:/gi, '');
 }
 
-export function MarkdownContent({ content, className = '' }) {
+interface MarkdownContentProps {
+  content: string;
+  className?: string;
+}
+
+export function MarkdownContent({ content, className = '' }: MarkdownContentProps) {
   const html = useMemo(() => {
     if (!content) return '';
-    return sanitizeHtml(marked.parse(content));
+    return sanitizeHtml(marked.parse(content) as string);
   }, [content]);
 
   return (

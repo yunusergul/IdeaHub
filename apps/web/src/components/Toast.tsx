@@ -1,14 +1,16 @@
 import { X, AlertCircle, CheckCircle, AlertTriangle } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToastStore } from '../stores/toastStore';
+import type { ToastItem } from '../types';
 
-const icons = {
+const icons: Record<ToastItem['type'], LucideIcon> = {
   error: AlertCircle,
   success: CheckCircle,
   warning: AlertTriangle,
 };
 
-const colors = {
+const colors: Record<ToastItem['type'], { bg: string; border: string; icon: string; text: string }> = {
   error: {
     bg: 'var(--error-50)',
     border: 'var(--error-200)',

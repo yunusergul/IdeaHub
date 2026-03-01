@@ -1,16 +1,45 @@
 import { create } from 'zustand';
 import { loginRequest, refreshTokenRequest } from '../lib/api';
 
+interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  department: string;
+  role: string;
+  initials: string;
+  avatar?: string | null;
+  locale?: string;
+}
+
+interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  user: AuthUser;
+}
+
+interface AuthState {
+  user: AuthUser | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  isLoading: boolean;
+  error: string | null;
+  readonly isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<AuthUser>;
+  loginWithTokens: (data: AuthTokens) => void;
+  logout: () => void;
+}
+
 const STORAGE_KEYS = {
   accessToken: 'ideahub-access-token',
   refreshToken: 'ideahub-refresh-token',
   user: 'ideahub-user',
 };
 
-export const useAuthStore = create((set, get) => {
-  let refreshTimer = null;
+export const useAuthStore = create<AuthState>((set, get) => {
+  let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-  const saveTokens = (tokens) => {
+  const saveTokens = (tokens: AuthTokens) => {
     set({
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
@@ -26,12 +55,12 @@ export const useAuthStore = create((set, get) => {
     localStorage.removeItem(STORAGE_KEYS.accessToken);
     localStorage.removeItem(STORAGE_KEYS.refreshToken);
     localStorage.removeItem(STORAGE_KEYS.user);
-    clearInterval(refreshTimer);
+    if (refreshTimer) clearInterval(refreshTimer);
     refreshTimer = null;
   };
 
   const scheduleRefresh = () => {
-    clearInterval(refreshTimer);
+    if (refreshTimer) clearInterval(refreshTimer);
     // Refresh at 13 minutes (access token expires at 15 min)
     refreshTimer = setInterval(async () => {
       try {
@@ -64,7 +93,7 @@ export const useAuthStore = create((set, get) => {
   const storedUser = localStorage.getItem(STORAGE_KEYS.user);
 
   return {
-    user: storedUser ? JSON.parse(storedUser) : null,
+    user: storedUser ? (JSON.parse(storedUser) as AuthUser) : null,
     accessToken: localStorage.getItem(STORAGE_KEYS.accessToken),
     refreshToken: localStorage.getItem(STORAGE_KEYS.refreshToken),
     isLoading: !!storedRefresh,
@@ -84,7 +113,7 @@ export const useAuthStore = create((set, get) => {
         set({ isLoading: false });
         return data.user;
       } catch (err) {
-        set({ error: err.message, isLoading: false });
+        set({ error: (err as Error).message, isLoading: false });
         throw err;
       }
     },

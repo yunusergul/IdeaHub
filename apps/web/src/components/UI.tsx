@@ -1,12 +1,22 @@
-import { forwardRef, useState, useCallback } from 'react';
+import { forwardRef, useState, useCallback, type ReactNode, type CSSProperties, type ButtonHTMLAttributes, type ChangeEvent } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { LucideIcon } from 'lucide-react';
 import './ui.css';
 
 /* ============================================
    BUTTON
    ============================================ */
-export function Button({ children, variant = 'primary', size = 'md', icon: Icon, iconRight, full, className = '', ...props }) {
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: string;
+  size?: string;
+  icon?: LucideIcon;
+  iconRight?: ReactNode;
+  full?: boolean;
+  className?: string;
+}
+
+export function Button({ children, variant = 'primary', size = 'md', icon: Icon, iconRight, full, className = '', ...props }: ButtonProps) {
   return (
     <button
       className={`btn btn--${variant} btn--${size} ${full ? 'btn--full' : ''} ${className}`}
@@ -22,7 +32,14 @@ export function Button({ children, variant = 'primary', size = 'md', icon: Icon,
 /* ============================================
    ICON BUTTON
    ============================================ */
-export function IconButton({ icon: Icon, size = 18, className = '', badge, ...props }) {
+interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  icon: LucideIcon;
+  size?: number;
+  className?: string;
+  badge?: number | null;
+}
+
+export function IconButton({ icon: Icon, size = 18, className = '', badge, ...props }: IconButtonProps) {
   return (
     <button className={`btn btn--ghost btn--icon ${className}`} {...props}>
       <Icon size={size} />
@@ -53,11 +70,20 @@ export function IconButton({ icon: Icon, size = 18, className = '', badge, ...pr
 /* ============================================
    BADGE
    ============================================ */
-export function Badge({ children, color, bg, dot = false, className = '' }) {
+interface BadgeProps {
+  children: ReactNode;
+  color?: string;
+  bg?: string;
+  dot?: boolean;
+  className?: string;
+  style?: CSSProperties;
+}
+
+export function Badge({ children, color, bg, dot = false, className = '', style }: BadgeProps) {
   return (
     <span
       className={`badge ${dot ? 'badge--dot' : ''} ${className}`}
-      style={{ color, '--badge-color': color, '--badge-bg': bg }}
+      style={{ color, '--badge-color': color, '--badge-bg': bg, ...style } as CSSProperties}
     >
       {children}
     </span>
@@ -69,7 +95,14 @@ export function Badge({ children, color, bg, dot = false, className = '' }) {
    ============================================ */
 const avatarColors = ['', '--orange', '--green', '--pink', '--cyan'];
 
-export function Avatar({ name, initials, size = 'md', src }) {
+interface AvatarProps {
+  name?: string;
+  initials?: string;
+  size?: string;
+  src?: string | null;
+}
+
+export function Avatar({ name, initials, size = 'md', src }: AvatarProps) {
   const colorIdx = name ? (name.charCodeAt(0) + (name.charCodeAt(1) || 0)) % avatarColors.length : 0;
 
   if (src) {
@@ -93,7 +126,16 @@ export function Avatar({ name, initials, size = 'md', src }) {
 /* ============================================
    MODAL
    ============================================ */
-export function Modal({ isOpen, onClose, title, children, footer, size = '' }) {
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+  footer?: ReactNode;
+  size?: string;
+}
+
+export function Modal({ isOpen, onClose, title, children, footer, size = '' }: ModalProps) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -130,11 +172,24 @@ export function Modal({ isOpen, onClose, title, children, footer, size = '' }) {
 /* ============================================
    CONFIRM DIALOG
    ============================================ */
-export function ConfirmDialog({ isOpen, onClose, onConfirm, title, message, confirmLabel, cancelLabel, variant = 'danger' }) {
-  const colors = {
-    danger: { icon: 'var(--error-500)', bg: 'var(--error-50)', btn: 'danger' },
+interface ConfirmDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  variant?: 'danger' | 'warning';
+}
+
+export function ConfirmDialog({ isOpen, onClose, onConfirm, title, message, confirmLabel, cancelLabel, variant = 'danger' }: ConfirmDialogProps) {
+  const dangerColors = { icon: 'var(--error-500)', bg: 'var(--error-50)', btn: 'danger' };
+  const colorMap: Record<string, { icon: string; bg: string; btn: string }> = {
+    danger: dangerColors,
     warning: { icon: 'var(--warning-500)', bg: 'var(--warning-50)', btn: 'secondary' },
-  }[variant] || { icon: 'var(--error-500)', bg: 'var(--error-50)', btn: 'danger' };
+  };
+  const colors = colorMap[variant] ?? dangerColors;
 
   return (
     <AnimatePresence>
@@ -195,11 +250,29 @@ export function ConfirmDialog({ isOpen, onClose, onConfirm, title, message, conf
   );
 }
 
-export function useConfirm() {
-  const [state, setState] = useState({ isOpen: false, resolve: null, title: '', message: '', confirmLabel: '', cancelLabel: '', variant: 'danger' });
+interface ConfirmOptions {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  variant?: 'danger' | 'warning';
+}
 
-  const confirm = useCallback(({ title, message, confirmLabel, cancelLabel, variant = 'danger' }) => {
-    return new Promise((resolve) => {
+interface ConfirmState {
+  isOpen: boolean;
+  resolve: ((value: boolean) => void) | null;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  variant: string;
+}
+
+export function useConfirm(): [(opts: ConfirmOptions) => Promise<boolean>, ConfirmDialogProps] {
+  const [state, setState] = useState<ConfirmState>({ isOpen: false, resolve: null, title: '', message: '', confirmLabel: '', cancelLabel: '', variant: 'danger' });
+
+  const confirm = useCallback(({ title, message, confirmLabel, cancelLabel, variant = 'danger' }: ConfirmOptions) => {
+    return new Promise<boolean>((resolve) => {
       setState({ isOpen: true, resolve, title, message, confirmLabel, cancelLabel, variant });
     });
   }, []);
@@ -214,7 +287,7 @@ export function useConfirm() {
     setState(s => ({ ...s, isOpen: false }));
   }, [state.resolve]);
 
-  const dialogProps = {
+  const dialogProps: ConfirmDialogProps = {
     isOpen: state.isOpen,
     onClose: handleClose,
     onConfirm: handleConfirm,
@@ -222,7 +295,7 @@ export function useConfirm() {
     message: state.message,
     confirmLabel: state.confirmLabel,
     cancelLabel: state.cancelLabel,
-    variant: state.variant,
+    variant: state.variant as 'danger' | 'warning',
   };
 
   return [confirm, dialogProps];
@@ -231,7 +304,13 @@ export function useConfirm() {
 /* ============================================
    TOGGLE
    ============================================ */
-export function Toggle({ checked, onChange, label }) {
+interface ToggleProps {
+  checked: boolean;
+  onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+  label?: string;
+}
+
+export function Toggle({ checked, onChange, label }: ToggleProps) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
       {label && <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>{label}</span>}
@@ -247,7 +326,13 @@ export function Toggle({ checked, onChange, label }) {
 /* ============================================
    VOTE CONTROL
    ============================================ */
-export function VoteControl({ upvotes, hasVoted, onVote }) {
+interface VoteControlProps {
+  upvotes: number;
+  hasVoted: boolean;
+  onVote: (type: string) => void;
+}
+
+export function VoteControl({ upvotes, hasVoted, onVote }: VoteControlProps) {
   return (
     <div className="vote-control">
       <button
@@ -267,7 +352,13 @@ export function VoteControl({ upvotes, hasVoted, onVote }) {
 /* ============================================
    SEARCH INPUT
    ============================================ */
-export const SearchInput = forwardRef(function SearchInput({ value, onChange, placeholder = 'Ara...', ...props }, ref) {
+interface SearchInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  value: string;
+  onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+}
+
+export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function SearchInput({ value, onChange, placeholder = 'Ara...', ...props }, ref) {
   return (
     <div className="search-input">
       <svg className="search-input__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

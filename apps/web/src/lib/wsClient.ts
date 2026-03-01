@@ -1,47 +1,56 @@
+import type { WsConnectionState } from '../types';
+
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3001/ws';
 const REQUEST_TIMEOUT = 15_000;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const MAX_BACKOFF = 30_000;
 
-class WsClient {
-  constructor() {
-    this.ws = null;
-    this.accessToken = null;
-    this._tokenGetter = null; // function that returns current token
-    this._tokenRefresher = null; // function that triggers a token refresh
-    this.pendingRequests = new Map();
-    this._inflightDedup = new Map(); // key: action+payload → promise (deduplication)
-    this.eventListeners = new Map();
-    this.stateListeners = new Set();
-    this.state = 'disconnected'; // disconnected | connected | reconnecting | failed
-    this.reconnectAttempts = 0;
-    this.reconnectTimer = null;
-    this.authResolve = null;
-    this.authReject = null;
-  }
+type EventCallback = (data: unknown) => void;
+type StateCallback = (state: WsConnectionState) => void;
 
-  setTokenGetter(getter) {
+interface PendingRequest {
+  resolve: (value: unknown) => void;
+  reject: (reason: unknown) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+class WsClient {
+  ws: WebSocket | null = null;
+  accessToken: string | null = null;
+  private _tokenGetter: (() => string | null) | null = null;
+  private _tokenRefresher: (() => Promise<string | null>) | null = null;
+  pendingRequests = new Map<string, PendingRequest>();
+  private _inflightDedup = new Map<string, Promise<unknown>>();
+  eventListeners = new Map<string, Set<EventCallback>>();
+  stateListeners = new Set<StateCallback>();
+  state: WsConnectionState = 'disconnected';
+  reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private authResolve: ((value: unknown) => void) | null = null;
+  private authReject: ((reason: unknown) => void) | null = null;
+
+  setTokenGetter(getter: () => string | null): void {
     this._tokenGetter = getter;
   }
 
-  setTokenRefresher(refresher) {
+  setTokenRefresher(refresher: () => Promise<string | null>): void {
     this._tokenRefresher = refresher;
   }
 
-  _getCurrentToken() {
+  private _getCurrentToken(): string | null {
     if (this._tokenGetter) {
       return this._tokenGetter() || this.accessToken;
     }
     return this.accessToken;
   }
 
-  connect(accessToken) {
+  connect(accessToken: string): Promise<unknown> {
     this.accessToken = accessToken;
     this.reconnectAttempts = 0;
     return this._connect();
   }
 
-  _connect() {
+  private _connect(): Promise<unknown> {
     return new Promise((resolve, reject) => {
       if (this.ws) {
         this.ws.onclose = null;
@@ -53,13 +62,12 @@ class WsClient {
       this.authReject = reject;
 
       this.ws.onopen = () => {
-        // Send auth message with the freshest token available
         const token = this._getCurrentToken();
-        this.ws.send(JSON.stringify({ type: 'auth', token }));
+        this.ws!.send(JSON.stringify({ type: 'auth', token }));
       };
 
-      this.ws.onmessage = (e) => {
-        this._handleMessage(JSON.parse(e.data));
+      this.ws.onmessage = (e: MessageEvent) => {
+        this._handleMessage(JSON.parse(e.data as string));
       };
 
       this.ws.onclose = () => {
@@ -75,12 +83,11 @@ class WsClient {
     });
   }
 
-  _handleMessage(msg) {
+  private _handleMessage(msg: Record<string, unknown>): void {
     switch (msg.type) {
       case 'auth:ok': {
         this.reconnectAttempts = 0;
         this._setState('connected');
-        // Emit auth:ok event so listeners can sync locale etc.
         const authListeners = this.eventListeners.get('auth:ok');
         if (authListeners) {
           authListeners.forEach(cb => cb(msg.user));
@@ -93,40 +100,39 @@ class WsClient {
         break;
       }
       case 'result': {
-        const pending = this.pendingRequests.get(msg.id);
+        const pending = this.pendingRequests.get(msg.id as string);
         if (pending) {
           clearTimeout(pending.timer);
           pending.resolve(msg.data);
-          this.pendingRequests.delete(msg.id);
+          this.pendingRequests.delete(msg.id as string);
         }
         break;
       }
       case 'event': {
-        const listeners = this.eventListeners.get(msg.event);
+        const listeners = this.eventListeners.get(msg.event as string);
         if (listeners) {
           listeners.forEach(cb => cb(msg.data));
         }
         break;
       }
       case 'error': {
+        const error = msg.error as Record<string, unknown>;
         if (msg.id) {
-          const pending = this.pendingRequests.get(msg.id);
+          const pending = this.pendingRequests.get(msg.id as string);
           if (pending) {
             clearTimeout(pending.timer);
-            const err = new Error(msg.error.message);
-            err.code = msg.error.code;
+            const err = new Error(error.message as string);
+            (err as unknown as Record<string, unknown>).code = error.code;
             pending.reject(err);
-            this.pendingRequests.delete(msg.id);
+            this.pendingRequests.delete(msg.id as string);
           }
         }
-        // Auth error during connection
-        if (msg.error.code === 'INVALID_TOKEN') {
+        if (error.code === 'INVALID_TOKEN') {
           if (this.authReject) {
-            this.authReject(new Error(msg.error.message));
+            this.authReject(new Error(error.message as string));
             this.authResolve = null;
             this.authReject = null;
           }
-          // During reconnect, trigger a token refresh before next attempt
           if (this.state === 'reconnecting' && this._tokenRefresher) {
             this._tokenRefresher().then(newToken => {
               if (newToken) this.accessToken = newToken;
@@ -138,8 +144,7 @@ class WsClient {
     }
   }
 
-  send(action, payload = {}) {
-    // Deduplicate identical concurrent requests (same action + payload)
+  send(action: string, payload: Record<string, unknown> = {}): Promise<unknown> {
     const dedupKey = action + ':' + JSON.stringify(payload);
     const inflight = this._inflightDedup.get(dedupKey);
     if (inflight) return inflight;
@@ -151,7 +156,7 @@ class WsClient {
     return promise;
   }
 
-  _sendRaw(action, payload = {}) {
+  private _sendRaw(action: string, payload: Record<string, unknown> = {}): Promise<unknown> {
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error('No WebSocket connection'));
@@ -169,11 +174,11 @@ class WsClient {
     });
   }
 
-  on(event, callback) {
+  on(event: string, callback: EventCallback): () => void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, new Set());
     }
-    this.eventListeners.get(event).add(callback);
+    this.eventListeners.get(event)!.add(callback);
     return () => {
       const listeners = this.eventListeners.get(event);
       if (listeners) {
@@ -183,52 +188,51 @@ class WsClient {
     };
   }
 
-  onStateChange(callback) {
+  onStateChange(callback: StateCallback): () => void {
     this.stateListeners.add(callback);
     return () => this.stateListeners.delete(callback);
   }
 
-  updateToken(newToken) {
+  updateToken(newToken: string): void {
     this.accessToken = newToken;
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: 'auth', token: newToken }));
     }
   }
 
-  subscribe(channels) {
+  subscribe(channels: string[]): Promise<unknown> {
     if (!Array.isArray(channels) || channels.length === 0) return Promise.resolve();
     return this.send('subscribe', { channels });
   }
 
-  unsubscribe(channels) {
+  unsubscribe(channels: string[]): Promise<unknown> {
     if (!Array.isArray(channels) || channels.length === 0) return Promise.resolve();
     return this.send('unsubscribe', { channels });
   }
 
-  disconnect() {
-    clearTimeout(this.reconnectTimer);
-    this.reconnectAttempts = MAX_RECONNECT_ATTEMPTS; // prevent reconnect
+  disconnect(): void {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectAttempts = MAX_RECONNECT_ATTEMPTS;
     if (this.ws) {
       this.ws.onclose = null;
       this.ws.close();
       this.ws = null;
     }
     this._setState('disconnected');
-    // Reject all pending requests
-    for (const [id, pending] of this.pendingRequests) {
+    for (const [, pending] of this.pendingRequests) {
       clearTimeout(pending.timer);
       pending.reject(new Error('Connection closed'));
     }
     this.pendingRequests.clear();
   }
 
-  _setState(newState) {
+  private _setState(newState: WsConnectionState): void {
     if (this.state === newState) return;
     this.state = newState;
     this.stateListeners.forEach(cb => cb(newState));
   }
 
-  _scheduleReconnect() {
+  private _scheduleReconnect(): void {
     if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       this._setState('failed');
       return;
@@ -236,9 +240,7 @@ class WsClient {
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), MAX_BACKOFF);
     this.reconnectAttempts++;
     this.reconnectTimer = setTimeout(() => {
-      this._connect().catch(() => {
-        // onclose handler will trigger next reconnect
-      });
+      this._connect().catch(() => {});
     }, delay);
   }
 }

@@ -1,16 +1,54 @@
-import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import { useState, useRef, useMemo, useEffect, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, Paperclip, GripVertical, ChevronRight, ChevronDown, Clock, TrendingUp, CheckCircle2, Calendar, Zap, Filter, ArrowRight, Play } from 'lucide-react';
+import {
+  MessageSquare,
+  Paperclip,
+  GripVertical,
+  ChevronRight,
+  ChevronDown,
+  Clock,
+  TrendingUp,
+  CheckCircle2,
+  Calendar,
+  Zap,
+  Filter,
+  ArrowRight,
+  Play,
+} from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useAuthStore } from '../stores/authStore';
 import { Avatar } from '../components/UI';
 import SprintAssignModal from '../components/SprintAssignModal';
 import { getStatusLabel } from '../lib/statusHelpers';
 import { KanbanCardSkeleton } from '../components/Skeleton';
+import type { EnrichedIdea, SprintItem, Status, AppSettings } from '../types';
 
-function daysAgo(dateStr, t) {
+interface KanbanColumnSentinelProps {
+  statusId: string;
+  loading: boolean;
+  onIntersect: (statusId: string) => void;
+}
+
+interface PipelineStage extends Status {
+  count: number;
+  pct: number;
+  index: number;
+}
+
+interface PipelineStats {
+  stages: PipelineStage[];
+  completedPct: number;
+  total: number;
+}
+
+interface TimeFilter {
+  id: string;
+  label: string;
+}
+
+function daysAgo(dateStr: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   if (days === 0) return t('today');
@@ -18,7 +56,7 @@ function daysAgo(dateStr, t) {
   return t('daysAgo', { count: days });
 }
 
-function filterByTime(ideas, timeFilter) {
+function filterByTime(ideas: EnrichedIdea[], timeFilter: string): EnrichedIdea[] {
   if (timeFilter === 'all') return ideas;
   const now = new Date();
 
@@ -33,7 +71,7 @@ function filterByTime(ideas, timeFilter) {
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
     return ideas.filter(i => new Date(i.createdAt) >= start);
   }
-  const daysMap = { '7d': 7, '14d': 14, '30d': 30 };
+  const daysMap: Record<string, number> = { '7d': 7, '14d': 14, '30d': 30 };
   const days = daysMap[timeFilter];
   if (days) {
     const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
@@ -42,7 +80,7 @@ function filterByTime(ideas, timeFilter) {
   return ideas;
 }
 
-function filterBySprint(ideas, sprintId) {
+function filterBySprint(ideas: EnrichedIdea[], sprintId: string): EnrichedIdea[] {
   if (sprintId === 'all') return ideas;
   return ideas.filter(i => {
     const sid = i.sprint && typeof i.sprint === 'object' ? i.sprint.id : (i.sprintId || i.sprint);
@@ -50,24 +88,26 @@ function filterBySprint(ideas, sprintId) {
   });
 }
 
-const chipStyle = (active) => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: 5,
-  padding: '5px 12px',
-  borderRadius: 'var(--radius-full)',
-  border: `1px solid ${active ? 'var(--primary-300)' : 'var(--border-default)'}`,
-  background: active ? 'var(--primary-50)' : 'var(--bg-primary)',
-  color: active ? 'var(--primary-700)' : 'var(--text-secondary)',
-  fontSize: '0.75rem',
-  fontWeight: active ? 600 : 500,
-  cursor: 'pointer',
-  whiteSpace: 'nowrap',
-  transition: 'all 150ms',
-});
+function chipStyle(active: boolean): CSSProperties {
+  return {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    padding: '5px 12px',
+    borderRadius: 'var(--radius-full)',
+    border: `1px solid ${active ? 'var(--primary-300)' : 'var(--border-default)'}`,
+    background: active ? 'var(--primary-50)' : 'var(--bg-primary)',
+    color: active ? 'var(--primary-700)' : 'var(--text-secondary)',
+    fontSize: '0.75rem',
+    fontWeight: active ? 600 : 500,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    transition: 'all 150ms',
+  };
+}
 
-function KanbanColumnSentinel({ statusId, loading, onIntersect }) {
-  const ref = useRef(null);
+function KanbanColumnSentinel({ statusId, loading, onIntersect }: KanbanColumnSentinelProps): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = ref.current;
@@ -75,7 +115,7 @@ function KanbanColumnSentinel({ statusId, loading, onIntersect }) {
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !loading) {
+        if (entry?.isIntersecting && !loading) {
           onIntersect(statusId);
         }
       },
@@ -96,22 +136,27 @@ function KanbanColumnSentinel({ statusId, loading, onIntersect }) {
   );
 }
 
-export default function KanbanBoard() {
+function getStatusId(idea: EnrichedIdea): string | undefined {
+  if (idea.status && typeof idea.status === 'object') return idea.status.id;
+  return idea.statusId || undefined;
+}
+
+export default function KanbanBoard(): React.JSX.Element {
   const { t } = useTranslation('kanban');
-  const kanbanIdeas = useAppStore(s => s.kanbanIdeas);
-  const fallbackIdeas = useAppStore(s => s.ideas);
-  const fetchKanbanIdeas = useAppStore(s => s.fetchKanbanIdeas);
-  const fetchKanbanIdeasForStatus = useAppStore(s => s.fetchKanbanIdeasForStatus);
-  const kanbanColumnHasMore = useAppStore(s => s.kanbanColumnHasMore);
-  const kanbanColumnLoading = useAppStore(s => s.kanbanColumnLoading);
-  const initialized = useAppStore(s => s.initialized);
+  const kanbanIdeas = useAppStore(s => s.kanbanIdeas) as EnrichedIdea[];
+  const fallbackIdeas = useAppStore(s => s.ideas) as EnrichedIdea[];
+  const fetchKanbanIdeas = useAppStore(s => s.fetchKanbanIdeas) as () => void;
+  const fetchKanbanIdeasForStatus = useAppStore(s => s.fetchKanbanIdeasForStatus) as (statusId: string) => void;
+  const kanbanColumnHasMore = useAppStore(s => s.kanbanColumnHasMore) as Record<string, boolean>;
+  const kanbanColumnLoading = useAppStore(s => s.kanbanColumnLoading) as Record<string, boolean>;
+  const initialized = useAppStore(s => s.initialized) as boolean;
   const ideas = kanbanIdeas.length > 0 ? kanbanIdeas : fallbackIdeas;
-  const searchQuery = useAppStore(s => s.searchQuery);
-  const rawStatuses = useAppStore(s => s.statusList);
-  const updateIdeaStatus = useAppStore(s => s.updateIdeaStatus);
-  const appSettings = useAppStore(s => s.appSettings);
-  const currentUser = useAuthStore(s => s.user);
-  const sprints = useAppStore(s => s.sprintsList);
+  const searchQuery = useAppStore(s => s.searchQuery) as string;
+  const rawStatuses = useAppStore(s => s.statusList) as Status[];
+  const updateIdeaStatus = useAppStore(s => s.updateIdeaStatus) as (ideaId: string, statusId: string) => void;
+  const appSettings = useAppStore(s => s.appSettings) as AppSettings;
+  const currentUser = useAuthStore(s => s.user) as { id: string; name: string; role: string } | null;
+  const sprints = useAppStore(s => s.sprintsList) as SprintItem[];
   const statuses = useMemo(() => [...rawStatuses].sort((a, b) => {
     const oa = a.order ?? 999;
     const ob = b.order ?? 999;
@@ -125,19 +170,18 @@ export default function KanbanBoard() {
   const isManager = currentUser?.role === 'admin' || currentUser?.role === 'product_manager';
   const canDrag = isManager || appSettings?.kanban_user_readonly !== 'true';
   const navigate = useNavigate();
-  const [draggedId, setDraggedId] = useState(null);
-  const [overColumn, setOverColumn] = useState(null);
-  const [sprintAssignIdea, setSprintAssignIdea] = useState(null);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const dragCounter = useRef({});
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [overColumn, setOverColumn] = useState<string | null>(null);
+  const [sprintAssignIdea, setSprintAssignIdea] = useState<EnrichedIdea | null>(null);
+  const [filterOpen, setFilterOpen] = useState<boolean>(false);
+  const dragCounter = useRef<Record<string, number>>({});
 
   // Filters
-  const currentSprint = sprints.find(s => s.isCurrent);
-  const [selectedSprint, setSelectedSprint] = useState('all');
-  const [selectedTime, setSelectedTime] = useState('all');
-  const [pipelineOpen, setPipelineOpen] = useState(false);
+  const [selectedSprint, setSelectedSprint] = useState<string>('all');
+  const [selectedTime, setSelectedTime] = useState<string>('all');
+  const [pipelineOpen, setPipelineOpen] = useState<boolean>(false);
 
-  const timeFilters = [
+  const timeFilters: TimeFilter[] = [
     { id: 'all', label: t('allTime') },
     { id: 'week', label: t('thisWeek') },
     { id: 'month', label: t('thisMonth') },
@@ -162,29 +206,18 @@ export default function KanbanBoard() {
     return result;
   }, [ideas, selectedSprint, selectedTime, searchQuery]);
 
-  // Helper to get status/sprint id from idea (handles both object and string)
-  const getStatusId = (idea) => {
-    if (idea.status && typeof idea.status === 'object') return idea.status.id;
-    return idea.statusId || idea.status;
-  };
-  const getSprintId = (idea) => {
-    if (idea.sprint && typeof idea.sprint === 'object') return idea.sprint.id;
-    return idea.sprintId || idea.sprint;
-  };
-
   const activeFilterCount = (selectedSprint !== 'all' ? 1 : 0) + (selectedTime !== 'all' ? 1 : 0);
 
-  const pipelineStats = useMemo(() => {
+  const pipelineStats = useMemo((): PipelineStats => {
     const total = filteredIdeas.length;
     if (total === 0) return { stages: [], completedPct: 0, total: 0 };
 
-    // Find "completed" status - check by label or by last order
     const completedStatus = statuses.find(s => s.id === 'completed');
     const completedId = completedStatus?.id;
     const completedCount = filteredIdeas.filter(i => getStatusId(i) === completedId).length;
     const completedPct = Math.round((completedCount / total) * 100);
 
-    const stages = statuses.map((s, idx) => {
+    const stages: PipelineStage[] = statuses.map((s, idx) => {
       const count = filteredIdeas.filter(i => getStatusId(i) === s.id).length;
       return { ...s, count, pct: Math.round((count / total) * 100), index: idx };
     });
@@ -192,25 +225,25 @@ export default function KanbanBoard() {
     return { stages, completedPct, total };
   }, [filteredIdeas, statuses]);
 
-  const handleDragStart = (e, ideaId) => {
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, ideaId: string): void => {
     setDraggedId(ideaId);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', ideaId);
   };
 
-  const handleDragEnd = () => {
+  const handleDragEnd = (): void => {
     setDraggedId(null);
     setOverColumn(null);
     dragCounter.current = {};
   };
 
-  const handleDragEnter = (e, statusId) => {
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>, statusId: string): void => {
     e.preventDefault();
     dragCounter.current[statusId] = (dragCounter.current[statusId] || 0) + 1;
     setOverColumn(statusId);
   };
 
-  const handleDragLeave = (e, statusId) => {
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>, statusId: string): void => {
     dragCounter.current[statusId] = (dragCounter.current[statusId] || 0) - 1;
     if (dragCounter.current[statusId] <= 0) {
       dragCounter.current[statusId] = 0;
@@ -218,7 +251,7 @@ export default function KanbanBoard() {
     }
   };
 
-  const handleDragOver = (e) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };
@@ -227,7 +260,7 @@ export default function KanbanBoard() {
   const inProgressStatus = statuses.find(s => s.id === 'in-progress');
   const inProgressId = inProgressStatus?.id;
 
-  const handleDrop = (e, statusId) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, statusId: string): void => {
     e.preventDefault();
     const ideaId = e.dataTransfer.getData('text/plain');
     if (ideaId) {
@@ -246,7 +279,7 @@ export default function KanbanBoard() {
     dragCounter.current = {};
   };
 
-  const clearFilters = () => {
+  const clearFilters = (): void => {
     setSelectedSprint('all');
     setSelectedTime('all');
   };
@@ -430,7 +463,7 @@ export default function KanbanBoard() {
           <span style={{ fontSize: '0.75rem', color: 'var(--primary-600)' }}>
             {new Date(selectedSprintData.startDate).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}
             {' — '}
-            {new Date(selectedSprintData.endDate).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}
+            {new Date(selectedSprintData.endDate!).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}
           </span>
           {selectedSprintData.isCurrent && (
             <span style={{
@@ -655,13 +688,15 @@ export default function KanbanBoard() {
                 display: 'flex', flexDirection: 'column', gap: 8,
               }}>
                 {columnIdeas.map(idea => {
-                  const sprintInfo = idea.sprint && typeof idea.sprint === 'object' ? idea.sprint : sprints.find(s => s.id === (idea.sprintId || idea.sprint));
+                  const sprintInfo: SprintItem | undefined = idea.sprint && typeof idea.sprint === 'object'
+                    ? idea.sprint
+                    : sprints.find(s => s.id === (idea.sprintId || undefined));
                   return (
                     <motion.div
                       key={idea.id}
                       layout
                       draggable={canDrag}
-                      onDragStart={(e) => canDrag && handleDragStart(e, idea.id)}
+                      onDragStart={(e) => canDrag && handleDragStart(e as unknown as React.DragEvent<HTMLDivElement>, idea.id)}
                       onDragEnd={handleDragEnd}
                       onClick={() => navigate(`/dashboard/idea/${idea.id}`)}
                       style={{
@@ -772,7 +807,7 @@ export default function KanbanBoard() {
                             {idea.commentCount}
                           </span>
                         )}
-                        {idea.attachments?.length > 0 && (
+                        {idea.attachments && idea.attachments.length > 0 && (
                           <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
                             <Paperclip size={11} />
                             {idea.attachments.length}
@@ -787,7 +822,7 @@ export default function KanbanBoard() {
                 {kanbanColumnHasMore[status.id] && (
                   <KanbanColumnSentinel
                     statusId={status.id}
-                    loading={kanbanColumnLoading[status.id]}
+                    loading={kanbanColumnLoading[status.id] ?? false}
                     onIntersect={fetchKanbanIdeasForStatus}
                   />
                 )}

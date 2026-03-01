@@ -4,12 +4,20 @@ import { motion } from 'framer-motion';
 import { Zap, Calendar, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Modal, Button } from './UI';
 import { useAppStore } from '../stores/appStore';
+import type { EnrichedIdea } from '../types';
 
-export default function SprintAssignModal({ isOpen, onClose, idea, targetStatusId }) {
+interface SprintAssignModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  idea: EnrichedIdea | null;
+  targetStatusId?: string;
+}
+
+export default function SprintAssignModal({ isOpen, onClose, idea, targetStatusId }: SprintAssignModalProps) {
   const { t, i18n } = useTranslation('kanban');
   const assignToSprint = useAppStore(s => s.assignToSprint);
   const sprints = useAppStore(s => s.sprintsList);
-  const [selectedSprint, setSelectedSprint] = useState(() => {
+  const [selectedSprint, setSelectedSprint] = useState<string | null>(() => {
     const current = sprints.find(s => s.isCurrent);
     return current?.id || null;
   });
@@ -23,8 +31,6 @@ export default function SprintAssignModal({ isOpen, onClose, idea, targetStatusI
     assignToSprint(idea.id, selectedSprint, targetStatusId);
     onClose();
   };
-
-  const selectedData = sprints.find(s => s.id === selectedSprint);
 
   const dateLocale = i18n.language === 'tr' ? 'tr-TR' : 'en-US';
 
@@ -174,9 +180,9 @@ export default function SprintAssignModal({ isOpen, onClose, idea, targetStatusI
                 }}>
                   <Calendar size={11} style={{ color: 'var(--text-tertiary)' }} />
                   <span style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
-                    {new Date(sprint.startDate).toLocaleDateString(dateLocale, { day: 'numeric', month: 'long' })}
+                    {sprint.startDate && new Date(sprint.startDate).toLocaleDateString(dateLocale, { day: 'numeric', month: 'long' })}
                     {' — '}
-                    {new Date(sprint.endDate).toLocaleDateString(dateLocale, { day: 'numeric', month: 'long' })}
+                    {sprint.endDate && new Date(sprint.endDate).toLocaleDateString(dateLocale, { day: 'numeric', month: 'long' })}
                   </span>
                 </div>
               </div>

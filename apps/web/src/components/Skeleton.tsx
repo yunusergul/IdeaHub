@@ -1,11 +1,20 @@
-const shimmerStyle = {
+import type { CSSProperties } from 'react';
+
+const shimmerStyle: CSSProperties = {
   background: 'linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%)',
   backgroundSize: '200% 100%',
   animation: 'shimmer 1.5s infinite ease-in-out',
   borderRadius: 'var(--radius-md)',
 };
 
-function Bone({ width = '100%', height = 14, borderRadius, style }) {
+interface BoneProps {
+  width?: string | number;
+  height?: number;
+  borderRadius?: string;
+  style?: CSSProperties;
+}
+
+function Bone({ width = '100%', height = 14, borderRadius, style }: BoneProps) {
   return (
     <div style={{
       ...shimmerStyle,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -7,6 +7,11 @@ import { Button } from '../components/UI';
 import { useAuthStore } from '../stores/authStore';
 import { INTEGRATION_DEFS } from '../lib/integrations';
 import { fetchSsoProviders } from '../lib/api';
+import type { IntegrationDef, IntegrationConfig } from '../types';
+
+interface SsoProvider extends IntegrationDef {
+  config: IntegrationConfig & { clientId?: string; tenantId?: string; allowedDomains?: string };
+}
 
 export default function Login() {
   const { t } = useTranslation('auth');
@@ -15,24 +20,24 @@ export default function Login() {
   const isAuthenticated = useAuthStore(s => !!s.accessToken && !!s.user);
   const authLoading = useAuthStore(s => s.isLoading);
 
-  const [ssoProviders, setSsoProviders] = useState([]);
+  const [ssoProviders, setSsoProviders] = useState<SsoProvider[]>([]);
   const [ssoLoaded, setSsoLoaded] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSsoProviders()
-      .then(data => {
+      .then((data: { providers?: Array<{ id: string; clientId?: string; tenantId?: string; allowedDomains?: string }> }) => {
         const providers = (data.providers || [])
           .filter(p => INTEGRATION_DEFS.find(d => d.id === p.id && d.sso))
           .map(p => ({
-            ...INTEGRATION_DEFS.find(d => d.id === p.id),
+            ...INTEGRATION_DEFS.find(d => d.id === p.id)!,
             config: p,
-          }));
+          })) as SsoProvider[];
         setSsoProviders(providers);
         if (providers.length === 0) setShowEmailForm(true);
       })
@@ -57,7 +62,7 @@ export default function Login() {
     return <Navigate to="/dashboard" replace />;
   }
 
-  const handleSsoLogin = (provider) => {
+  const handleSsoLogin = (provider: SsoProvider) => {
     const redirectUri = `${window.location.origin}/auth/callback`;
     const nonce = crypto.randomUUID();
     const state = `${provider.id}:${nonce}`;
@@ -83,14 +88,14 @@ export default function Login() {
     }
   };
 
-  const handleAdminLogin = async (e) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
       await login(email, password);
       navigate('/dashboard');
-    } catch (err) {
+    } catch {
       setError(t('loginFailed'));
     } finally {
       setLoading(false);
@@ -285,7 +290,7 @@ export default function Login() {
   );
 }
 
-const styles = {
+const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: '100vh',
     display: 'flex',

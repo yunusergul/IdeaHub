@@ -1,4 +1,6 @@
-export const INTEGRATION_DEFS = [
+import type { IntegrationDef } from '../types';
+
+export const INTEGRATION_DEFS: IntegrationDef[] = [
   {
     id: 'azure-ad',
     name: 'Azure AD (Entra ID)',

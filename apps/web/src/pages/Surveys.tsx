@@ -7,8 +7,16 @@ import { useAppStore } from '../stores/appStore';
 import { useAuthStore } from '../stores/authStore';
 import { Badge, Button } from '../components/UI';
 import { SurveyCardSkeleton } from '../components/Skeleton';
+import type { EnrichedSurvey } from '../types';
 
-function StarRating({ rating, onRate, readonly = false, size = 20 }) {
+interface StarRatingProps {
+  rating: number;
+  onRate: (star: number) => void;
+  readonly?: boolean;
+  size?: number;
+}
+
+function StarRating({ rating, onRate, readonly = false, size = 20 }: StarRatingProps) {
   const [hover, setHover] = useState(0);
 
   return (
@@ -42,11 +50,11 @@ function StarRating({ rating, onRate, readonly = false, size = 20 }) {
   );
 }
 
-function getDueDateLabel(dueDate, t) {
+function getDueDateLabel(dueDate: string | undefined, t: (key: string, opts?: Record<string, unknown>) => string): string | null {
   if (!dueDate) return null;
   const due = new Date(dueDate);
   const now = new Date();
-  const diff = due - now;
+  const diff = due.getTime() - now.getTime();
   if (diff <= 0) return t('expired');
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);
@@ -63,11 +71,10 @@ export default function Surveys() {
   const rateSurvey = useAppStore(s => s.rateSurvey);
   const loading = useAppStore(s => s.loading);
   const surveysHasMore = useAppStore(s => s.surveysHasMore);
-  const surveysLoadingMore = useAppStore(s => s.surveysLoadingMore);
   const loadMoreSurveys = useAppStore(s => s.loadMoreSurveys);
 
   // Infinite scroll sentinel
-  const sentinelRef = useRef(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const surveysHasMoreRef = useRef(surveysHasMore);
   surveysHasMoreRef.current = surveysHasMore;
   useEffect(() => {
@@ -76,20 +83,20 @@ export default function Surveys() {
     const scrollRoot = sentinel.closest('main');
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && surveysHasMoreRef.current) loadMoreSurveys();
+        if (entries[0]?.isIntersecting && surveysHasMoreRef.current) loadMoreSurveys();
       },
       { root: scrollRoot, rootMargin: '100px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [loadMoreSurveys, loading]);
+  }, [loadMoreSurveys, loading, surveysHasMore]);
 
   const [filterBy, _setFilterBy] = useState(() => localStorage.getItem('ideahub-survey-filter') || 'unanswered');
-  const setFilterBy = (v) => { _setFilterBy(v); localStorage.setItem('ideahub-survey-filter', v); };
+  const setFilterBy = (v: string) => { _setFilterBy(v); localStorage.setItem('ideahub-survey-filter', v); };
 
-  const hasUserVoted = (survey) => {
+  const hasUserVoted = (survey: EnrichedSurvey) => {
     if (survey.votedBy && Array.isArray(survey.votedBy)) {
-      return survey.votedBy.includes(currentUser?.id);
+      return survey.votedBy.includes(currentUser?.id ?? '');
     }
     return survey.options.some(opt =>
       Array.isArray(opt.votes) && opt.votes.some(v => v.userId === currentUser?.id)
@@ -97,8 +104,7 @@ export default function Surveys() {
   };
 
   const filteredSurveys = useMemo(() => {
-    // Search is now server-side via pagination
-    let list = surveysList;
+    const list = surveysList;
 
     switch (filterBy) {
       case 'unanswered':
@@ -114,10 +120,10 @@ export default function Surveys() {
       default:
         return list;
     }
-  }, [surveysList, filterBy, currentUser]);
+  }, [surveysList, filterBy, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [sortBy, _setSortBy] = useState(() => localStorage.getItem('ideahub-survey-sort') || 'newest');
-  const setSortBy = (v) => { _setSortBy(v); localStorage.setItem('ideahub-survey-sort', v); };
+  const setSortBy = (v: string) => { _setSortBy(v); localStorage.setItem('ideahub-survey-sort', v); };
   const [sortOpen, setSortOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -127,17 +133,23 @@ export default function Surveys() {
     { id: 'highestRated', label: t('highestRated') },
   ];
 
+  const getOptionVotes = (opt: EnrichedSurvey['options'][number]): number => {
+    if (typeof opt.votes === 'number') return opt.votes;
+    if (Array.isArray(opt.votes)) return opt.votes.length;
+    return 0;
+  };
+
   const sortedSurveys = useMemo(() => {
     const list = [...filteredSurveys];
     switch (sortBy) {
       case 'mostVoted':
         return list.sort((a, b) => {
-          const aVotes = a.options.reduce((s, o) => s + (typeof o.votes === 'number' ? o.votes : (Array.isArray(o.votes) ? o.votes.length : 0)), 0);
-          const bVotes = b.options.reduce((s, o) => s + (typeof o.votes === 'number' ? o.votes : (Array.isArray(o.votes) ? o.votes.length : 0)), 0);
+          const aVotes = a.options.reduce((s, o) => s + getOptionVotes(o), 0);
+          const bVotes = b.options.reduce((s, o) => s + getOptionVotes(o), 0);
           return bVotes - aVotes;
         });
       case 'highestRated': {
-        const getAvg = (s) => {
+        const getAvg = (s: EnrichedSurvey) => {
           if (s.avgRating) return s.avgRating;
           if (Array.isArray(s.ratings) && s.ratings.length > 0) {
             return s.ratings.reduce((sum, r) => sum + r.rating, 0) / s.ratings.length;
@@ -148,7 +160,7 @@ export default function Surveys() {
       }
       case 'newest':
       default:
-        return list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
   }, [filteredSurveys, sortBy]);
 
@@ -328,30 +340,20 @@ export default function Surveys() {
         )}
         {sortedSurveys.map((survey, i) => {
           const isDevelopment = survey.type === 'development';
-
-          // Handle both mock and backend data shapes
-          const getOptionVotes = (opt) => {
-            if (typeof opt.votes === 'number') return opt.votes;
-            if (Array.isArray(opt.votes)) return opt.votes.length;
-            return 0;
-          };
-
           const totalVotes = survey.options.reduce((sum, o) => sum + getOptionVotes(o), 0);
 
-          // Check if user has voted
           const hasVoted = (() => {
             if (survey.votedBy && Array.isArray(survey.votedBy)) {
-              return survey.votedBy.includes(currentUser?.id);
+              return survey.votedBy.includes(currentUser?.id ?? '');
             }
             return survey.options.some(opt =>
               Array.isArray(opt.votes) && opt.votes.some(v => v.userId === currentUser?.id)
             );
           })();
 
-          // Get user rating
           const userRating = (() => {
             if (survey.ratings && !Array.isArray(survey.ratings) && currentUser) {
-              return survey.ratings[currentUser.id] || 0;
+              return (survey.ratings as Record<string, number>)[currentUser.id] || 0;
             }
             if (Array.isArray(survey.ratings) && currentUser) {
               const r = survey.ratings.find(r => r.userId === currentUser.id);
@@ -360,7 +362,6 @@ export default function Surveys() {
             return 0;
           })();
 
-          // Average rating
           const avgRating = (() => {
             if (survey.avgRating) return survey.avgRating;
             if (Array.isArray(survey.ratings) && survey.ratings.length > 0) {
@@ -371,16 +372,14 @@ export default function Surveys() {
           })();
 
           const ratingCount = Array.isArray(survey.ratings) ? survey.ratings.length : (survey.ratingCount || 0);
-
-          // Target departments
           const targetDepts = survey.targetDepartments || [];
 
-          // Find winning option for completed development surveys
-          const winningOption = isDevelopment && !survey.isActive
+          const firstOption = survey.options[0];
+          const winningOption = isDevelopment && !survey.isActive && firstOption
             ? survey.options.reduce((best, opt) => {
                 const votes = getOptionVotes(opt);
                 return votes > getOptionVotes(best) ? opt : best;
-              }, survey.options[0])
+              }, firstOption)
             : null;
 
           return (
@@ -505,10 +504,10 @@ export default function Surveys() {
                         transition: 'transform 100ms ease',
                       }}
                       onMouseEnter={(e) => {
-                        if (survey.isActive && !hasVoted) e.currentTarget.style.transform = 'scale(1.01)';
+                        if (survey.isActive && !hasVoted) (e.currentTarget as HTMLElement).style.transform = 'scale(1.01)';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'scale(1)';
+                        (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
                       }}
                     >
                       <div className="survey-bar__header">

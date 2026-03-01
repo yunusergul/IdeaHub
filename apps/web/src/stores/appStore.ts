@@ -4,28 +4,144 @@ import { useWsStore } from './wsStore';
 import { useAuthStore } from './authStore';
 import { toast } from './toastStore';
 import { applyPalette, DEFAULT_PALETTE } from '../lib/palettes';
+import type {
+  EnrichedIdea, EnrichedSurvey, CategoryItem, SprintItem,
+  NotificationItem, VotingRuleItem, AppSettings, Integrations,
+  ThemeMode, ViewMode,
+} from '../types';
 
-const _send = (action, payload) => useWsStore.getState().send(action, payload);
+const _send = (action: string, payload: Record<string, unknown> = {}): Promise<unknown> =>
+  useWsStore.getState().send(action, payload);
 
-let _searchDebounceTimer = null;
+let _searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-function getSystemTheme() {
+function getSystemTheme(): 'dark' | 'light' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-function applyResolvedTheme(mode) {
+function applyResolvedTheme(mode: ThemeMode): 'dark' | 'light' {
   const resolved = mode === 'system' ? getSystemTheme() : mode;
   document.documentElement.setAttribute('data-theme', resolved);
   return resolved;
 }
 
-const initTheme = () => {
-  const saved = localStorage.getItem('ideahub-theme') || 'system';
+const initTheme = (): ThemeMode => {
+  const saved = (localStorage.getItem('ideahub-theme') || 'system') as ThemeMode;
   applyResolvedTheme(saved);
   return saved;
 };
 
-export const useAppStore = create((set, get) => ({
+interface StatusItem {
+  id: string;
+  label: string;
+  color: string;
+  bg: string;
+  order: number;
+  description?: string;
+  isSystem?: boolean;
+}
+
+interface KanbanColumnState {
+  [statusId: string]: number | boolean;
+}
+
+interface AppState {
+  // Domain state
+  ideas: EnrichedIdea[];
+  categories: CategoryItem[];
+  statusList: StatusItem[];
+  notifications: NotificationItem[];
+  surveysList: EnrichedSurvey[];
+  votingRulesList: VotingRuleItem[];
+  sprintsList: SprintItem[];
+  appSettings: AppSettings;
+  integrations: Integrations;
+  loading: boolean;
+  error: string | null;
+  initialized: boolean;
+
+  // Pagination state - Ideas
+  ideasTotal: number;
+  ideasHasMore: boolean;
+  ideasLoadingMore: boolean;
+
+  // Pagination state - Surveys
+  surveysTotal: number;
+  surveysHasMore: boolean;
+  surveysLoadingMore: boolean;
+
+  // Kanban state
+  kanbanIdeas: EnrichedIdea[];
+  kanbanColumnOffsets: Record<string, number>;
+  kanbanColumnHasMore: Record<string, boolean>;
+  kanbanColumnLoading: Record<string, boolean>;
+
+  // UI state
+  selectedCategory: string;
+  selectedStatus: string;
+  searchQuery: string;
+  viewMode: ViewMode;
+  theme: ThemeMode;
+
+  // Internal mutators
+  _prependIdea: (idea: EnrichedIdea) => void;
+  _updateIdea: (idea: EnrichedIdea) => void;
+  _removeIdea: (id: string) => void;
+  _prependNotification: (data: NotificationItem) => void;
+
+  // Settings
+  setAppSettings: (data: Record<string, unknown>) => void;
+  setIntegration: (id: string, config: Record<string, unknown>) => Promise<void>;
+  removeIntegration: (id: string) => Promise<void>;
+  setSurveysList: (data: EnrichedSurvey[]) => void;
+  setSprintsList: (data: SprintItem[]) => void;
+  setStatusList: (data: StatusItem[]) => void;
+  setVotingRulesList: (dataOrUpdater: VotingRuleItem[] | ((prev: VotingRuleItem[]) => VotingRuleItem[])) => void;
+
+  // Data fetching
+  fetchInitialData: () => Promise<void>;
+  resetInitialized: () => void;
+  loadMoreIdeas: () => Promise<void>;
+  resetAndRefetchIdeas: () => Promise<void>;
+  loadMoreSurveys: () => Promise<void>;
+  resetAndRefetchSurveys: () => Promise<void>;
+  fetchKanbanIdeas: () => Promise<void>;
+  fetchKanbanIdeasForStatus: (statusId: string, reset?: boolean) => Promise<void>;
+
+  // Mutations
+  vote: (ideaId: string, type: string) => Promise<void>;
+  deleteIdea: (ideaId: string) => Promise<void>;
+  addIdea: (newIdea: { title: string; summary?: string; content?: string; category: string; attachmentIds?: string[] }) => Promise<EnrichedIdea>;
+  updateIdeaStatus: (ideaId: string, statusId: string) => Promise<void>;
+  assignToSprint: (ideaId: string, sprintId: string, statusId?: string) => Promise<void>;
+  voteSurvey: (surveyId: string, optionId: string) => Promise<void>;
+  deleteSurvey: (surveyId: string) => Promise<void>;
+  rateSurvey: (surveyId: string, rating: number) => Promise<void>;
+  addStatus: (newStatus: { label: string; color: string; bg: string; description?: string }, afterOrder?: number) => Promise<void>;
+  removeStatus: (statusId: string) => Promise<void>;
+  reorderStatuses: (orderedIds: string[]) => Promise<void>;
+  addSprint: (sprint: Record<string, unknown>) => Promise<void>;
+  updateSprint: (sprintId: string, updates: Record<string, unknown>) => Promise<void>;
+  deleteSprint: (sprintId: string) => Promise<void>;
+  setActiveSprint: (sprintId: string | null) => Promise<void>;
+  markNotificationRead: (id: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
+  updateSettings: (key: string, value: unknown) => Promise<void>;
+  addCategory: (category: { label: string; icon: string; color: string }) => Promise<CategoryItem>;
+  removeCategory: (categoryId: string) => Promise<void>;
+
+  // UI actions
+  setSelectedCategory: (cat: string) => void;
+  setSelectedStatus: (statusId: string) => void;
+  setSearchQuery: (q: string) => void;
+  setViewMode: (mode: ViewMode) => void;
+  setTheme: (mode: ThemeMode) => void;
+
+  // Passthrough
+  send: (action: string, payload?: Record<string, unknown>) => Promise<unknown>;
+}
+
+export const useAppStore = create<AppState>((set, get) => ({
   // Domain state
   ideas: [],
   categories: [],
@@ -80,24 +196,25 @@ export const useAppStore = create((set, get) => ({
       // Normalize snake_case fields from PG trigger payload
       relatedId: data.relatedId ?? data.related_id,
       userId: data.userId ?? data.user_id,
-      createdAt: data.createdAt ?? data.created_at,
+      createdAt: data.createdAt ?? data.created_at ?? '',
     }, ...s.notifications],
   })),
 
   setAppSettings: (data) => {
-    if (data?.palette) applyPalette(data.palette, get().theme);
-    const updates = { appSettings: { ...get().appSettings, ...data } };
-    if (data?.integrations) {
-      try { updates.integrations = JSON.parse(data.integrations); } catch {}
+    const d = data as AppSettings;
+    if (d?.palette) applyPalette(d.palette, get().theme);
+    const updates: Record<string, unknown> = { appSettings: { ...get().appSettings, ...d } };
+    if (d?.integrations) {
+      try { updates.integrations = JSON.parse(d.integrations); } catch { /* ignore */ }
     }
-    set(updates);
+    set(updates as Partial<AppState>);
   },
   setIntegration: async (id, config) => {
     const next = { ...get().integrations, [id]: config };
     set({ integrations: next });
     try {
       await _send('settings:update', { key: 'integrations', value: JSON.stringify(next) });
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:integrationSaveFailed'));
     }
   },
@@ -107,7 +224,7 @@ export const useAppStore = create((set, get) => ({
     set({ integrations: next });
     try {
       await _send('settings:update', { key: 'integrations', value: JSON.stringify(next) });
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:integrationRemoveFailed'));
     }
   },
@@ -128,7 +245,7 @@ export const useAppStore = create((set, get) => ({
     set({ loading: true, error: null, initialized: true });
 
     try {
-      const ideasPayload = { offset: 0, limit: 20 };
+      const ideasPayload: Record<string, unknown> = { offset: 0, limit: 20 };
       if (selectedCategory !== 'all') ideasPayload.categoryId = selectedCategory;
       if (selectedStatus !== 'all') ideasPayload.statusId = selectedStatus;
       if (searchQuery) ideasPayload.search = searchQuery;
@@ -142,7 +259,7 @@ export const useAppStore = create((set, get) => ({
         _send('votingRules:list', {}),
         _send('sprints:list', {}),
         _send('settings:get', {}),
-      ]);
+      ]) as [unknown, CategoryItem[], StatusItem[], NotificationItem[], unknown, VotingRuleItem[], SprintItem[], AppSettings];
 
       // Apply palette from server settings (theme-aware)
       const palette = settingsData?.palette || DEFAULT_PALETTE;
@@ -151,17 +268,20 @@ export const useAppStore = create((set, get) => ({
       applyPalette(palette, resolved);
 
       // Parse integrations from settings
-      let integrations = {};
+      let integrations: Integrations = {};
       try {
         if (settingsData?.integrations) {
-          integrations = JSON.parse(settingsData.integrations);
+          integrations = JSON.parse(settingsData.integrations) as Integrations;
         }
-      } catch {}
+      } catch { /* ignore */ }
 
-      const ideas = ideasData?.items ?? ideasData;
-      const ideasTotal = ideasData?.total ?? (Array.isArray(ideasData) ? ideasData.length : 0);
-      const surveys = surveysData?.items ?? surveysData;
-      const surveysTotal = surveysData?.total ?? (Array.isArray(surveysData) ? surveysData.length : 0);
+      const ideasResult = ideasData as { items?: EnrichedIdea[]; total?: number } | EnrichedIdea[];
+      const ideas = Array.isArray(ideasResult) ? ideasResult : (ideasResult.items ?? []);
+      const ideasTotal = Array.isArray(ideasResult) ? ideasResult.length : (ideasResult.total ?? 0);
+
+      const surveysResult = surveysData as { items?: EnrichedSurvey[]; total?: number } | EnrichedSurvey[];
+      const surveys = Array.isArray(surveysResult) ? surveysResult : (surveysResult.items ?? []);
+      const surveysTotal = Array.isArray(surveysResult) ? surveysResult.length : (surveysResult.total ?? 0);
 
       set({
         ideas: Array.isArray(ideas) ? ideas : [],
@@ -187,7 +307,7 @@ export const useAppStore = create((set, get) => ({
       });
     } catch (err) {
       console.error('Failed to load initial data:', err);
-      set({ error: err.message, loading: false });
+      set({ error: (err as Error).message, loading: false });
     }
   },
 
@@ -196,13 +316,13 @@ export const useAppStore = create((set, get) => ({
   // --- Categories ---
 
   addCategory: async ({ label, icon, color }) => {
-    const category = await _send('categories:create', { label, icon, color });
+    const category = await _send('categories:create', { label, icon, color }) as CategoryItem;
     set(s => ({
       categories: [
         ...s.categories.filter(c => c.id !== 'all'),
         category,
       ].sort((a, b) => a.label.localeCompare(b.label))
-        .reduce((acc, c) => {
+        .reduce<CategoryItem[]>((acc, c) => {
           if (acc.length === 0) acc.push({ id: 'all', label: i18n.t('common:all'), icon: 'LayoutGrid', color: 'var(--text-tertiary)' });
           acc.push(c);
           return acc;
@@ -225,12 +345,12 @@ export const useAppStore = create((set, get) => ({
     if (!ideasHasMore || ideasLoadingMore) return;
     set({ ideasLoadingMore: true });
     try {
-      const payload = { offset: ideas.length, limit: 20 };
+      const payload: Record<string, unknown> = { offset: ideas.length, limit: 20 };
       if (selectedCategory !== 'all') payload.categoryId = selectedCategory;
       if (selectedStatus !== 'all') payload.statusId = selectedStatus;
       if (searchQuery) payload.search = searchQuery;
-      const data = await _send('ideas:list', payload);
-      const items = data?.items ?? data;
+      const data = await _send('ideas:list', payload) as { items?: EnrichedIdea[]; total?: number };
+      const items = data?.items ?? (data as unknown as EnrichedIdea[]);
       const total = data?.total ?? 0;
       if (Array.isArray(items)) {
         set(s => ({
@@ -250,12 +370,12 @@ export const useAppStore = create((set, get) => ({
     const { selectedCategory, selectedStatus, searchQuery } = get();
     set({ ideasLoadingMore: true });
     try {
-      const payload = { offset: 0, limit: 20 };
+      const payload: Record<string, unknown> = { offset: 0, limit: 20 };
       if (selectedCategory !== 'all') payload.categoryId = selectedCategory;
       if (selectedStatus !== 'all') payload.statusId = selectedStatus;
       if (searchQuery) payload.search = searchQuery;
-      const data = await _send('ideas:list', payload);
-      const items = data?.items ?? data;
+      const data = await _send('ideas:list', payload) as { items?: EnrichedIdea[]; total?: number };
+      const items = data?.items ?? (data as unknown as EnrichedIdea[]);
       const total = data?.total ?? 0;
       set({
         ideas: Array.isArray(items) ? items : [],
@@ -274,10 +394,10 @@ export const useAppStore = create((set, get) => ({
     if (!surveysHasMore || surveysLoadingMore) return;
     set({ surveysLoadingMore: true });
     try {
-      const payload = { offset: surveysList.length, limit: 20 };
+      const payload: Record<string, unknown> = { offset: surveysList.length, limit: 20 };
       if (searchQuery) payload.search = searchQuery;
-      const data = await _send('surveys:list', payload);
-      const items = data?.items ?? data;
+      const data = await _send('surveys:list', payload) as { items?: EnrichedSurvey[]; total?: number };
+      const items = data?.items ?? (data as unknown as EnrichedSurvey[]);
       const total = data?.total ?? 0;
       if (Array.isArray(items)) {
         set(s => ({
@@ -297,10 +417,10 @@ export const useAppStore = create((set, get) => ({
     const { searchQuery } = get();
     set({ surveysLoadingMore: true });
     try {
-      const payload = { offset: 0, limit: 20 };
+      const payload: Record<string, unknown> = { offset: 0, limit: 20 };
       if (searchQuery) payload.search = searchQuery;
-      const data = await _send('surveys:list', payload);
-      const items = data?.items ?? data;
+      const data = await _send('surveys:list', payload) as { items?: EnrichedSurvey[]; total?: number };
+      const items = data?.items ?? (data as unknown as EnrichedSurvey[]);
       const total = data?.total ?? 0;
       set({
         surveysList: Array.isArray(items) ? items : [],
@@ -316,8 +436,8 @@ export const useAppStore = create((set, get) => ({
 
   fetchKanbanIdeas: async () => {
     try {
-      const data = await _send('ideas:list', { offset: 0, limit: 1000 });
-      const items = data?.items ?? data;
+      const data = await _send('ideas:list', { offset: 0, limit: 1000 }) as { items?: EnrichedIdea[] };
+      const items = data?.items ?? (data as unknown as EnrichedIdea[]);
       set({ kanbanIdeas: Array.isArray(items) ? items : [] });
     } catch (err) {
       console.error('Failed to fetch kanban ideas:', err);
@@ -340,14 +460,16 @@ export const useAppStore = create((set, get) => ({
     set({ kanbanColumnLoading: { ...get().kanbanColumnLoading, [statusId]: true } });
 
     try {
-      const data = await _send('ideas:list', { statusId, offset, limit });
-      const items = data?.items ?? data;
+      const data = await _send('ideas:list', { statusId, offset, limit }) as { items?: EnrichedIdea[]; total?: number };
+      const items = data?.items ?? (data as unknown as EnrichedIdea[]);
       const total = data?.total ?? 0;
 
       if (!Array.isArray(items)) return;
 
       set(s => {
-        const existingIds = new Set(reset ? [] : s.kanbanIdeas.filter(i => (i.status?.id || i.statusId) === statusId).map(i => i.id));
+        const existingIds = new Set(
+          reset ? [] : s.kanbanIdeas.filter(i => (i.status?.id || i.statusId) === statusId).map(i => i.id)
+        );
         const newItems = items.filter(i => !existingIds.has(i.id));
         const kanbanIdeas = reset
           ? [...s.kanbanIdeas.filter(i => (i.status?.id || i.statusId) !== statusId), ...items]
@@ -371,8 +493,7 @@ export const useAppStore = create((set, get) => ({
   vote: async (ideaId, type) => {
     try {
       await _send('votes:cast', { ideaId, type });
-      // vote:changed event in wsStore will handle re-fetching the updated idea
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:voteFailed'));
     }
   },
@@ -395,7 +516,7 @@ export const useAppStore = create((set, get) => ({
         content: newIdea.content || '',
         categoryId: newIdea.category,
         attachmentIds: newIdea.attachmentIds || [],
-      });
+      }) as EnrichedIdea;
       set(s => ({ ideas: [idea, ...s.ideas.filter(i => i.id !== idea.id)] }));
       return idea;
     } catch (err) {
@@ -406,20 +527,20 @@ export const useAppStore = create((set, get) => ({
 
   updateIdeaStatus: async (ideaId, statusId) => {
     try {
-      const updated = await _send('ideas:update', { ideaId, statusId });
+      const updated = await _send('ideas:update', { ideaId, statusId }) as EnrichedIdea;
       set(s => ({ ideas: s.ideas.map(i => i.id === ideaId ? updated : i) }));
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:statusUpdateFailed'));
     }
   },
 
   assignToSprint: async (ideaId, sprintId, statusId) => {
     try {
-      const payload = { ideaId, sprintId };
+      const payload: Record<string, unknown> = { ideaId, sprintId };
       if (statusId) payload.statusId = statusId;
-      const updated = await _send('ideas:update', payload);
+      const updated = await _send('ideas:update', payload) as EnrichedIdea;
       set(s => ({ ideas: s.ideas.map(i => i.id === ideaId ? updated : i) }));
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:sprintAssignFailed'));
     }
   },
@@ -448,7 +569,7 @@ export const useAppStore = create((set, get) => ({
     }));
     try {
       await _send('surveys:vote', { surveyId, optionId });
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:surveyVoteFailed'));
       await get().resetAndRefetchSurveys();
     }
@@ -474,13 +595,13 @@ export const useAppStore = create((set, get) => ({
         const existing = ratings.findIndex(r => r.userId === currentUser?.id);
         const newRatings = existing >= 0
           ? ratings.map((r, i) => i === existing ? { ...r, rating } : r)
-          : [...ratings, { userId: currentUser?.id, rating }];
+          : [...ratings, { userId: currentUser?.id ?? '', rating }];
         return { ...sv, ratings: newRatings };
       }),
     }));
     try {
       await _send('surveys:rate', { surveyId, rating });
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:surveyRateFailed'));
       await get().resetAndRefetchSurveys();
     }
@@ -495,9 +616,9 @@ export const useAppStore = create((set, get) => ({
         description: newStatus.description || '',
         order: (afterOrder || 0) + 1,
       });
-      const statuses = await _send('statuses:list', {});
+      const statuses = await _send('statuses:list', {}) as StatusItem[];
       set({ statusList: statuses });
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:statusCreateFailed'));
     }
   },
@@ -505,9 +626,9 @@ export const useAppStore = create((set, get) => ({
   removeStatus: async (statusId) => {
     try {
       await _send('statuses:delete', { statusId });
-      const statuses = await _send('statuses:list', {});
+      const statuses = await _send('statuses:list', {}) as StatusItem[];
       set({ statusList: statuses });
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:statusDeleteFailed'));
     }
   },
@@ -515,9 +636,9 @@ export const useAppStore = create((set, get) => ({
   reorderStatuses: async (orderedIds) => {
     try {
       await _send('statuses:reorder', { orderedIds });
-      const statuses = await _send('statuses:list', {});
+      const statuses = await _send('statuses:list', {}) as StatusItem[];
       set({ statusList: statuses });
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:reorderFailed'));
     }
   },
@@ -525,9 +646,9 @@ export const useAppStore = create((set, get) => ({
   addSprint: async (sprint) => {
     try {
       await _send('sprints:create', sprint);
-      const data = await _send('sprints:list', {});
+      const data = await _send('sprints:list', {}) as SprintItem[];
       set({ sprintsList: [{ id: 'all', label: i18n.t('kanban:allSprints') }, ...data] });
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:sprintCreateFailed'));
     }
   },
@@ -535,9 +656,9 @@ export const useAppStore = create((set, get) => ({
   updateSprint: async (sprintId, updates) => {
     try {
       await _send('sprints:update', { sprintId, ...updates });
-      const data = await _send('sprints:list', {});
+      const data = await _send('sprints:list', {}) as SprintItem[];
       set({ sprintsList: [{ id: 'all', label: i18n.t('kanban:allSprints') }, ...data] });
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:sprintUpdateFailed'));
     }
   },
@@ -546,7 +667,7 @@ export const useAppStore = create((set, get) => ({
     try {
       await _send('sprints:delete', { sprintId });
       set(s => ({ sprintsList: s.sprintsList.filter(sp => sp.id !== sprintId) }));
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:sprintDeleteFailed'));
     }
   },
@@ -554,7 +675,7 @@ export const useAppStore = create((set, get) => ({
   setActiveSprint: async (sprintId) => {
     try {
       await _send('sprints:update', { sprintId, isCurrent: true });
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:sprintActivateFailed'));
     }
   },
@@ -565,7 +686,7 @@ export const useAppStore = create((set, get) => ({
       set(s => ({
         notifications: s.notifications.map(n => n.id === id ? { ...n, read: true } : n),
       }));
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:notificationReadFailed'));
     }
   },
@@ -576,16 +697,16 @@ export const useAppStore = create((set, get) => ({
       set(s => ({
         notifications: s.notifications.map(n => ({ ...n, read: true })),
       }));
-    } catch (err) {
+    } catch {
       toast.error(i18n.t('errors:notificationsReadFailed'));
     }
   },
 
   updateSettings: async (key, value) => {
     try {
-      const result = await _send('settings:update', { key, value });
+      const result = await _send('settings:update', { key, value }) as AppSettings;
       set(s => ({ appSettings: { ...s.appSettings, ...result } }));
-      if (key === 'palette') applyPalette(value, get().theme);
+      if (key === 'palette') applyPalette(value as string, get().theme);
     } catch (err) {
       toast.error(i18n.t('errors:settingsUpdateFailed'));
       throw err;
@@ -621,7 +742,7 @@ export const useAppStore = create((set, get) => ({
   }),
 
   // --- send passthrough for ad-hoc WS calls ---
-  send: (action, payload) => _send(action, payload),
+  send: (action, payload) => _send(action, payload || {}),
 }));
 
 // Listen for OS theme changes when theme is 'system'

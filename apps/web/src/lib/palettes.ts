@@ -1,7 +1,21 @@
-export const PALETTES = {
+import type { ThemeMode } from '../types';
+
+interface PaletteColors {
+  50: string; 100: string; 200: string; 300: string;
+  400: string; 500: string; 600: string; 700: string;
+  800: string; 900: string;
+}
+
+interface Palette {
+  id: string;
+  label: string;
+  colors: PaletteColors;
+}
+
+export const PALETTES: Record<string, Palette> = {
   indigo: {
     id: 'indigo',
-    label: 'İndigo',
+    label: 'Indigo',
     colors: {
       50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc',
       400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca',
@@ -37,7 +51,7 @@ export const PALETTES = {
   },
   emerald: {
     id: 'emerald',
-    label: 'Yeşil',
+    label: 'Yesil',
     colors: {
       50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7',
       400: '#34d399', 500: '#10b981', 600: '#059669', 700: '#047857',
@@ -64,7 +78,7 @@ export const PALETTES = {
   },
   cyan: {
     id: 'cyan',
-    label: 'Gök Mavi',
+    label: 'Gok Mavi',
     colors: {
       50: '#ecfeff', 100: '#cffafe', 200: '#a5f3fc', 300: '#67e8f9',
       400: '#22d3ee', 500: '#06b6d4', 600: '#0891b2', 700: '#0e7490',
@@ -76,18 +90,16 @@ export const PALETTES = {
 export const PALETTE_IDS = Object.keys(PALETTES);
 export const DEFAULT_PALETTE = 'indigo';
 
-// Parse hex color to RGB components
-function hexToRgb(hex) {
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result ? {
-    r: parseInt(result[1], 16),
-    g: parseInt(result[2], 16),
-    b: parseInt(result[3], 16),
+    r: parseInt(result[1]!, 16),
+    g: parseInt(result[2]!, 16),
+    b: parseInt(result[3]!, 16),
   } : { r: 0, g: 0, b: 0 };
 }
 
-// Mix a color with a dark base at a given ratio (0-1 = amount of color)
-function mixWithDark(hex, ratio, base = { r: 15, g: 17, b: 35 }) {
+function mixWithDark(hex: string, ratio: number, base = { r: 15, g: 17, b: 35 }): string {
   const c = hexToRgb(hex);
   const r = Math.round(base.r + (c.r - base.r) * ratio);
   const g = Math.round(base.g + (c.g - base.g) * ratio);
@@ -95,24 +107,23 @@ function mixWithDark(hex, ratio, base = { r: 15, g: 17, b: 35 }) {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 }
 
-// Generate dark mode variants for a palette
-function getDarkColors(colors) {
+function getDarkColors(colors: PaletteColors): PaletteColors {
   return {
-    50: mixWithDark(colors[500], 0.15),   // subtle bg tint
-    100: mixWithDark(colors[500], 0.22),  // hover bg tint
-    200: mixWithDark(colors[500], 0.30),  // stronger tint
-    300: colors[400],                      // use 400 as 300
+    50: mixWithDark(colors[500], 0.15),
+    100: mixWithDark(colors[500], 0.22),
+    200: mixWithDark(colors[500], 0.30),
+    300: colors[400],
     400: colors[400],
     500: colors[500],
-    600: colors[400],                      // lighter for dark bg readability
-    700: colors[300],                      // flip: light shade for text on dark
+    600: colors[400],
+    700: colors[300],
     800: colors[200],
     900: colors[100],
   };
 }
 
-export function applyPalette(paletteId, theme) {
-  const palette = PALETTES[paletteId] || PALETTES[DEFAULT_PALETTE];
+export function applyPalette(paletteId: string, theme: ThemeMode | string): void {
+  const palette = PALETTES[paletteId] || PALETTES[DEFAULT_PALETTE]!;
   const resolved = theme === 'system'
     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : theme;
@@ -122,6 +133,5 @@ export function applyPalette(paletteId, theme) {
   for (const [shade, color] of Object.entries(colors)) {
     root.style.setProperty(`--primary-${shade}`, color);
   }
-  // Update focus shadow to match the new primary-500
   root.style.setProperty('--shadow-focus', `0 0 0 3px ${palette.colors[500]}1f`);
 }

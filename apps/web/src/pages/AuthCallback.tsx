@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +10,7 @@ export default function AuthCallback() {
   const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const code = searchParams.get('code');
@@ -49,7 +49,7 @@ export default function AuthCallback() {
         navigate('/dashboard', { replace: true });
       })
       .catch(() => setError(t('serverConnectionFailed')));
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error) {
     return (
@@ -74,7 +74,7 @@ export default function AuthCallback() {
   );
 }
 
-const styles = {
+const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: '100vh',
     display: 'flex',

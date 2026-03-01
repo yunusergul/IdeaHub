@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { LucideIcon } from 'lucide-react';
 import {
   User, Tags, Users, Zap, Link2, Plus, Trash2, Edit3, Save,
   Moon, Sun, Monitor, Bell, Smartphone, Shield, ExternalLink,
@@ -15,8 +17,26 @@ import { toast } from '../stores/toastStore';
 import { INTEGRATION_DEFS } from '../lib/integrations';
 import { useTranslation } from 'react-i18next';
 import { getStatusLabel, getStatusDescription } from '../lib/statusHelpers';
+import type {
+  EnrichedIdea,
+  SprintItem,
+  VotingRuleItem,
+  CategoryItem,
+  IntegrationDef,
+  IntegrationConfig,
+  AppSettings,
+} from '../types';
 
-const tabDefs = [
+/* ============ TAB DEFINITIONS ============ */
+
+interface TabDef {
+  id: string;
+  icon: LucideIcon;
+  label?: string;
+  admin?: boolean;
+}
+
+const tabDefs: TabDef[] = [
   { id: 'profile', icon: User },
   { id: 'appearance', icon: Palette },
   { id: 'sprints', icon: Calendar, admin: true },
@@ -26,9 +46,43 @@ const tabDefs = [
   { id: 'integrations', icon: Link2, admin: true },
 ];
 
-export default function Settings() {
+/* ============ SHARED TYPES ============ */
+
+interface CurrentUser {
+  id: string;
+  name: string;
+  email: string;
+  department: string;
+  role: string;
+  initials: string;
+  avatar?: string | null;
+  locale?: string;
+}
+
+interface StatusItem {
+  id: string;
+  label: string;
+  color: string;
+  bg: string;
+  order: number;
+  description?: string;
+  isSystem?: boolean;
+}
+
+interface UserItem {
+  id: string;
+  name: string;
+  email: string;
+  department: string;
+  role: string;
+  initials: string;
+}
+
+/* ============ MAIN SETTINGS COMPONENT ============ */
+
+export default function Settings(): ReactNode {
   const { t } = useTranslation('settings');
-  const currentUser = useAuthStore(s => s.user);
+  const currentUser = useAuthStore(s => s.user) as CurrentUser | null;
   const votingRulesList = useAppStore(s => s.votingRulesList);
   const setVotingRulesList = useAppStore(s => s.setVotingRulesList);
   const sprintsList = useAppStore(s => s.sprintsList);
@@ -37,21 +91,10 @@ export default function Settings() {
   const deleteSprint = useAppStore(s => s.deleteSprint);
   const setActiveSprint = useAppStore(s => s.setActiveSprint);
   const ideas = useAppStore(s => s.ideas);
-  const categories = useAppStore(s => s.categories);
-  const statuses = useAppStore(s => s.statusList);
-  const send = useAppStore(s => s.send);
-  const [activeTab, setActiveTab] = useState('profile');
-  const [usersList, setUsersList] = useState([]);
+  const [activeTab, setActiveTab] = useState<string>('profile');
   const isAdmin = currentUser?.role === 'admin';
 
-  // Fetch users list for admin tab
-  useEffect(() => {
-    if (isAdmin && send) {
-      send('users:list', {}).then(setUsersList).catch(() => {});
-    }
-  }, [isAdmin, send]);
-
-  const tabs = tabDefs.map(td => ({ ...td, label: t(`tabs.${td.id}`) }));
+  const tabs: TabDef[] = tabDefs.map(td => ({ ...td, label: t(`tabs.${td.id}`) }));
   const visibleTabs = tabs.filter(tb => !tb.admin || isAdmin);
 
   return (
@@ -88,7 +131,7 @@ export default function Settings() {
                   fontWeight: isActive ? 600 : 400,
                   cursor: 'pointer',
                   transition: 'all 150ms ease',
-                  textAlign: 'left',
+                  textAlign: 'left' as const,
                   marginBottom: 2,
                 }}
               >
@@ -128,28 +171,35 @@ export default function Settings() {
 }
 
 /* ============ PROFILE TAB ============ */
-function ProfileTab({ currentUser }) {
+
+interface ProfileTabProps {
+  currentUser: CurrentUser | null;
+}
+
+function ProfileTab({ currentUser }: ProfileTabProps): ReactNode {
   const { t, i18n } = useTranslation('settings');
   const send = useAppStore(s => s.send);
-  const [prefs, setPrefs] = useState(null);
+  const [prefs, setPrefs] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
-    send('preferences:get', {}).then(setPrefs).catch(() => {});
+    send('preferences:get', {}).then(data => setPrefs(data as Record<string, unknown>)).catch(() => {});
   }, [send]);
 
-  const togglePref = async (key) => {
+  const togglePref = async (key: string): Promise<void> => {
     if (!prefs) return;
     const newValue = !prefs[key];
     const oldPrefs = { ...prefs };
     setPrefs(p => ({ ...p, [key]: newValue }));
     try {
       const updated = await send('preferences:update', { [key]: newValue });
-      setPrefs(updated);
+      setPrefs(updated as Record<string, unknown>);
     } catch {
       setPrefs(oldPrefs);
       toast.error(t('profile.prefSaveFailed'));
     }
   };
+
+  if (!currentUser) return null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -199,7 +249,7 @@ function ProfileTab({ currentUser }) {
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
           {[
-            { code: 'tr', label: 'Türkçe' },
+            { code: 'tr', label: 'Turkce' },
             { code: 'en', label: 'English' },
           ].map(lang => (
             <button
@@ -244,19 +294,19 @@ function ProfileTab({ currentUser }) {
               <Smartphone size={16} style={{ color: 'var(--text-tertiary)' }} />
               <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('profile.appNotifs')}</span>
             </div>
-            <Toggle label={t('profile.commentNotif')} checked={prefs.notifyAppComment} onChange={() => togglePref('notifyAppComment')} />
-            <Toggle label={t('profile.voteNotif')} checked={prefs.notifyAppVote} onChange={() => togglePref('notifyAppVote')} />
-            <Toggle label={t('profile.statusNotif')} checked={prefs.notifyAppStatus} onChange={() => togglePref('notifyAppStatus')} />
-            <Toggle label={t('profile.surveyNotif')} checked={prefs.notifyAppSurvey} onChange={() => togglePref('notifyAppSurvey')} />
+            <Toggle label={t('profile.commentNotif')} checked={prefs.notifyAppComment as boolean} onChange={() => togglePref('notifyAppComment')} />
+            <Toggle label={t('profile.voteNotif')} checked={prefs.notifyAppVote as boolean} onChange={() => togglePref('notifyAppVote')} />
+            <Toggle label={t('profile.statusNotif')} checked={prefs.notifyAppStatus as boolean} onChange={() => togglePref('notifyAppStatus')} />
+            <Toggle label={t('profile.surveyNotif')} checked={prefs.notifyAppSurvey as boolean} onChange={() => togglePref('notifyAppSurvey')} />
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 10, paddingTop: 10, borderBottom: '1px solid var(--border-default)' }}>
               <Mail size={16} style={{ color: 'var(--text-tertiary)' }} />
               <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('profile.emailNotifs')}</span>
             </div>
-            <Toggle label={t('profile.commentEmailNotif')} checked={prefs.notifyEmailComment} onChange={() => togglePref('notifyEmailComment')} />
-            <Toggle label={t('profile.voteEmailNotif')} checked={prefs.notifyEmailVote} onChange={() => togglePref('notifyEmailVote')} />
-            <Toggle label={t('profile.statusEmailNotif')} checked={prefs.notifyEmailStatus} onChange={() => togglePref('notifyEmailStatus')} />
-            <Toggle label={t('profile.surveyEmailNotif')} checked={prefs.notifyEmailSurvey} onChange={() => togglePref('notifyEmailSurvey')} />
+            <Toggle label={t('profile.commentEmailNotif')} checked={prefs.notifyEmailComment as boolean} onChange={() => togglePref('notifyEmailComment')} />
+            <Toggle label={t('profile.voteEmailNotif')} checked={prefs.notifyEmailVote as boolean} onChange={() => togglePref('notifyEmailVote')} />
+            <Toggle label={t('profile.statusEmailNotif')} checked={prefs.notifyEmailStatus as boolean} onChange={() => togglePref('notifyEmailStatus')} />
+            <Toggle label={t('profile.surveyEmailNotif')} checked={prefs.notifyEmailSurvey as boolean} onChange={() => togglePref('notifyEmailSurvey')} />
           </div>
         )}
       </div>
@@ -265,24 +315,37 @@ function ProfileTab({ currentUser }) {
 }
 
 /* ============ APPEARANCE TAB ============ */
-function AppearanceTab() {
+
+interface PaletteOption {
+  id: string;
+  label: string;
+  color: string;
+}
+
+interface ThemeOption {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+function AppearanceTab(): ReactNode {
   const { t } = useTranslation('settings');
   const theme = useAppStore(s => s.theme);
   const setTheme = useAppStore(s => s.setTheme);
   const appSettings = useAppStore(s => s.appSettings);
   const updateSettings = useAppStore(s => s.updateSettings);
-  const currentUser = useAuthStore(s => s.user);
+  const currentUser = useAuthStore(s => s.user) as CurrentUser | null;
   const isAdmin = currentUser?.role === 'admin';
 
   const currentPalette = appSettings?.palette || 'indigo';
-  const [selectedPalette, setSelectedPalette] = useState(currentPalette);
-  const [saving, setSaving] = useState(false);
+  const [selectedPalette, setSelectedPalette] = useState<string>(currentPalette);
+  const [saving, setSaving] = useState<boolean>(false);
 
   useEffect(() => {
     setSelectedPalette(appSettings?.palette || 'indigo');
   }, [appSettings?.palette]);
 
-  const palettes = [
+  const palettes: PaletteOption[] = [
     { id: 'indigo', label: t('appearance.indigo'), color: '#6366f1' },
     { id: 'blue', label: t('appearance.blue'), color: '#3b82f6' },
     { id: 'violet', label: t('appearance.violet'), color: '#8b5cf6' },
@@ -293,7 +356,7 @@ function AppearanceTab() {
     { id: 'cyan', label: t('appearance.cyan'), color: '#06b6d4' },
   ];
 
-  const handleSavePalette = async () => {
+  const handleSavePalette = async (): Promise<void> => {
     setSaving(true);
     try {
       await updateSettings('palette', selectedPalette);
@@ -310,14 +373,14 @@ function AppearanceTab() {
       <div className="card" style={{ padding: '24px' }}>
         <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: 16 }}>{t('appearance.theme')}</h3>
         <div style={{ display: 'flex', gap: 12 }}>
-          {[
+          {([
             { id: 'light', label: t('appearance.light'), icon: Sun },
             { id: 'dark', label: t('appearance.dark'), icon: Moon },
             { id: 'system', label: t('appearance.system'), icon: Monitor },
-          ].map(themeOpt => (
+          ] as ThemeOption[]).map(themeOpt => (
             <button
               key={themeOpt.id}
-              onClick={() => { if (theme !== themeOpt.id) setTheme(themeOpt.id); }}
+              onClick={() => { if (theme !== themeOpt.id) setTheme(themeOpt.id as 'light' | 'dark' | 'system'); }}
               style={{
                 flex: 1,
                 padding: '14px',
@@ -431,19 +494,36 @@ function AppearanceTab() {
 }
 
 /* ============ SPRINTS TAB ============ */
-function SprintsTab({ sprints, ideas, addSprint, updateSprint, deleteSprint, setActiveSprint }) {
+
+interface SprintsTabProps {
+  sprints: SprintItem[];
+  ideas: EnrichedIdea[];
+  addSprint: (sprint: Record<string, unknown>) => Promise<void>;
+  updateSprint: (sprintId: string, updates: Record<string, unknown>) => Promise<void>;
+  deleteSprint: (sprintId: string) => Promise<void>;
+  setActiveSprint: (sprintId: string | null) => Promise<void>;
+}
+
+interface SprintEditForm {
+  label: string;
+  startDate: string;
+  endDate: string;
+  [key: string]: unknown;
+}
+
+function SprintsTab({ sprints, ideas, addSprint, updateSprint, deleteSprint, setActiveSprint }: SprintsTabProps): ReactNode {
   const { t } = useTranslation('settings');
   const appSettings = useAppStore(s => s.appSettings);
   const updateSettings = useAppStore(s => s.updateSettings);
-  const [newLabel, setNewLabel] = useState('');
-  const [newStart, setNewStart] = useState('');
-  const [newEnd, setNewEnd] = useState('');
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ label: '', startDate: '', endDate: '' });
+  const [newLabel, setNewLabel] = useState<string>('');
+  const [newStart, setNewStart] = useState<string>('');
+  const [newEnd, setNewEnd] = useState<string>('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<SprintEditForm>({ label: '', startDate: '', endDate: '' });
 
   const activeSprints = sprints.filter(s => s.id !== 'all');
 
-  const handleAdd = () => {
+  const handleAdd = (): void => {
     if (!newLabel.trim() || !newStart || !newEnd) return;
     addSprint({ label: newLabel, startDate: newStart, endDate: newEnd, isCurrent: false });
     setNewLabel('');
@@ -451,23 +531,25 @@ function SprintsTab({ sprints, ideas, addSprint, updateSprint, deleteSprint, set
     setNewEnd('');
   };
 
-  const startEdit = (sprint) => {
+  const startEdit = (sprint: SprintItem): void => {
     setEditingId(sprint.id);
-    setEditForm({ label: sprint.label, startDate: sprint.startDate, endDate: sprint.endDate });
+    setEditForm({ label: sprint.label, startDate: sprint.startDate || '', endDate: sprint.endDate || '' });
   };
 
-  const saveEdit = () => {
+  const saveEdit = (): void => {
     if (!editForm.label.trim() || !editForm.startDate || !editForm.endDate) return;
-    updateSprint(editingId, editForm);
+    if (editingId) {
+      updateSprint(editingId, editForm);
+    }
     setEditingId(null);
   };
 
-  const getIdeaCount = (sprintId) => ideas.filter(i => {
+  const getIdeaCount = (sprintId: string): number => ideas.filter(i => {
     const sid = i.sprint && typeof i.sprint === 'object' ? i.sprint.id : (i.sprintId || i.sprint);
     return sid === sprintId;
   }).length;
 
-  const formatDate = (dateStr) => {
+  const formatDate = (dateStr: string | undefined): string => {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
   };
@@ -486,9 +568,9 @@ function SprintsTab({ sprints, ideas, addSprint, updateSprint, deleteSprint, set
             <input
               type="text"
               value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewLabel(e.target.value)}
               placeholder={t('sprints.namePlaceholder')}
-              onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleAdd()}
             />
           </div>
           <div className="form-group" style={{ minWidth: 150, marginBottom: 0 }}>
@@ -496,7 +578,7 @@ function SprintsTab({ sprints, ideas, addSprint, updateSprint, deleteSprint, set
             <input
               type="date"
               value={newStart}
-              onChange={(e) => setNewStart(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewStart(e.target.value)}
             />
           </div>
           <div className="form-group" style={{ minWidth: 150, marginBottom: 0 }}>
@@ -504,7 +586,7 @@ function SprintsTab({ sprints, ideas, addSprint, updateSprint, deleteSprint, set
             <input
               type="date"
               value={newEnd}
-              onChange={(e) => setNewEnd(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEnd(e.target.value)}
             />
           </div>
           <Button variant="primary" icon={Plus} onClick={handleAdd}>{t('common:add')}</Button>
@@ -539,19 +621,19 @@ function SprintsTab({ sprints, ideas, addSprint, updateSprint, deleteSprint, set
                     <input
                       type="text"
                       value={editForm.label}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, label: e.target.value }))}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditForm(prev => ({ ...prev, label: e.target.value }))}
                       style={{ flex: 1, minWidth: 120 }}
                     />
                     <input
                       type="date"
                       value={editForm.startDate}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, startDate: e.target.value }))}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditForm(prev => ({ ...prev, startDate: e.target.value }))}
                       style={{ width: 150 }}
                     />
                     <input
                       type="date"
                       value={editForm.endDate}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, endDate: e.target.value }))}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditForm(prev => ({ ...prev, endDate: e.target.value }))}
                       style={{ width: 150 }}
                     />
                     <button onClick={saveEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--success-500)', padding: 4, display: 'flex' }}>
@@ -649,7 +731,7 @@ function SprintsTab({ sprints, ideas, addSprint, updateSprint, deleteSprint, set
         </div>
         <Toggle
           checked={appSettings?.kanban_user_readonly === 'true'}
-          onChange={(e) => updateSettings('kanban_user_readonly', e.target.checked ? 'true' : 'false')}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSettings('kanban_user_readonly', e.target.checked ? 'true' : 'false')}
         />
       </div>
     </div>
@@ -657,31 +739,32 @@ function SprintsTab({ sprints, ideas, addSprint, updateSprint, deleteSprint, set
 }
 
 /* ============ CATEGORIES & STATUSES TAB ============ */
-function CategoriesTab() {
+
+function CategoriesTab(): ReactNode {
   const { t } = useTranslation('settings');
-  const contextStatuses = useAppStore(s => s.statusList);
+  const contextStatuses = useAppStore(s => s.statusList) as StatusItem[];
   const contextAddStatus = useAppStore(s => s.addStatus);
   const contextRemoveStatus = useAppStore(s => s.removeStatus);
   const contextReorderStatuses = useAppStore(s => s.reorderStatuses);
-  const [dragIdx, setDragIdx] = useState(null);
-  const [overIdx, setOverIdx] = useState(null);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
   const categories = useAppStore(s => s.categories);
   const storeAddCategory = useAppStore(s => s.addCategory);
   const storeRemoveCategory = useAppStore(s => s.removeCategory);
   const cats = categories.filter(c => c.id !== 'all');
 
-  const [newCatName, setNewCatName] = useState('');
-  const [newCatColor, setNewCatColor] = useState('#6366f1');
-  const [newCatIcon, setNewCatIcon] = useState('LayoutGrid');
-  const categoryIconMap = {
+  const [newCatName, setNewCatName] = useState<string>('');
+  const [newCatColor, setNewCatColor] = useState<string>('#6366f1');
+  const [newCatIcon, setNewCatIcon] = useState<string>('LayoutGrid');
+  const categoryIconMap: Record<string, LucideIcon> = {
     LayoutGrid, Bug, Sparkles, Heart, RefreshCw, Shield,
     Lightbulb, Rocket, Target, Star, Folder, Globe, Code, Package, Megaphone, Zap,
   };
-  const [newStatusName, setNewStatusName] = useState('');
-  const [newStatusColor, setNewStatusColor] = useState('#6366f1');
-  const [newStatusDesc, setNewStatusDesc] = useState('');
+  const [newStatusName, setNewStatusName] = useState<string>('');
+  const [newStatusColor, setNewStatusColor] = useState<string>('#6366f1');
+  const [newStatusDesc, setNewStatusDesc] = useState<string>('');
 
-  const addCategory = async () => {
+  const addCategory = async (): Promise<void> => {
     if (!newCatName.trim()) return;
     try {
       await storeAddCategory({ label: newCatName.trim(), icon: newCatIcon, color: newCatColor });
@@ -693,7 +776,7 @@ function CategoriesTab() {
     }
   };
 
-  const removeCategory = async (id) => {
+  const removeCategory = async (id: string): Promise<void> => {
     try {
       await storeRemoveCategory(id);
     } catch (err) {
@@ -701,7 +784,11 @@ function CategoriesTab() {
     }
   };
 
-  const handleAddStatus = () => {
+  // Separate flow statuses (ordered) from special statuses
+  const flowStatuses = contextStatuses.filter(s => s.order > 0).sort((a, b) => (a.order || 0) - (b.order || 0));
+  const specialStatuses = contextStatuses.filter(s => s.order === 0);
+
+  const handleAddStatus = (): void => {
     if (!newStatusName.trim()) return;
     const lastOrder = flowStatuses.length > 0 ? Math.max(...flowStatuses.map(s => s.order)) : 0;
     contextAddStatus({
@@ -709,15 +796,10 @@ function CategoriesTab() {
       color: newStatusColor,
       bg: newStatusColor + '15',
       description: newStatusDesc || '',
-      isSystem: false,
     }, lastOrder);
     setNewStatusName('');
     setNewStatusDesc('');
   };
-
-  // Separate flow statuses (ordered) from special statuses
-  const flowStatuses = contextStatuses.filter(s => s.order > 0).sort((a, b) => (a.order || 0) - (b.order || 0));
-  const specialStatuses = contextStatuses.filter(s => s.order === 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -752,16 +834,16 @@ function CategoriesTab() {
           <input
             type="color"
             value={newCatColor}
-            onChange={(e) => setNewCatColor(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCatColor(e.target.value)}
             style={{ width: 40, height: 38, padding: 2, cursor: 'pointer', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-md)', background: 'var(--bg-primary)' }}
           />
           <input
             type="text"
             value={newCatName}
-            onChange={(e) => setNewCatName(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewCatName(e.target.value)}
             placeholder={t('categories.newCatPlaceholder')}
             style={{ flex: 1, minWidth: 140 }}
-            onKeyDown={(e) => e.key === 'Enter' && addCategory()}
+            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && addCategory()}
           />
           <Button variant="primary" size="md" icon={Plus} onClick={addCategory}>{t('common:add')}</Button>
         </div>
@@ -836,15 +918,15 @@ function CategoriesTab() {
           ))}
         </div>
 
-        {/* Status list with descriptions — flow statuses are draggable */}
+        {/* Status list with descriptions -- flow statuses are draggable */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {(() => {
             // Compute preview list when dragging
             const displayList = (dragIdx !== null && overIdx !== null && dragIdx !== overIdx)
               ? (() => {
                   const arr = [...flowStatuses];
-                  const [moved] = arr.splice(dragIdx, 1);
-                  arr.splice(overIdx, 0, moved);
+                  const moved = arr.splice(dragIdx, 1)[0];
+                  if (moved) arr.splice(overIdx, 0, moved);
                   return arr;
                 })()
               : flowStatuses;
@@ -852,22 +934,32 @@ function CategoriesTab() {
             return displayList.map((st, idx) => {
               const isDragged = dragIdx !== null && st.id === flowStatuses[dragIdx]?.id;
               const isDropTarget = dragIdx !== null && overIdx === idx && dragIdx !== overIdx && !isDragged;
+
+              let bgColor: string;
+              if (isDragged) {
+                bgColor = 'color-mix(in srgb, var(--primary-500) 12%, var(--bg-secondary))';
+              } else if (isDropTarget) {
+                bgColor = 'color-mix(in srgb, var(--primary-500) 15%, var(--bg-secondary))';
+              } else {
+                bgColor = `color-mix(in srgb, ${st.color} 8%, var(--bg-secondary))`;
+              }
+
               return (
                 <div
                   key={st.id}
                   draggable
-                  onDragStart={(e) => {
+                  onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
                     setDragIdx(flowStatuses.findIndex(s => s.id === st.id));
                     setOverIdx(null);
                     e.dataTransfer.effectAllowed = 'move';
                   }}
                   onDragEnter={() => setOverIdx(idx)}
-                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                  onDragOver={(e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
                   onDragEnd={() => {
                     if (dragIdx !== null && overIdx !== null && dragIdx !== overIdx) {
                       const reordered = [...flowStatuses];
-                      const [moved] = reordered.splice(dragIdx, 1);
-                      reordered.splice(overIdx, 0, moved);
+                      const moved = reordered.splice(dragIdx, 1)[0];
+                      if (moved) reordered.splice(overIdx, 0, moved);
                       contextReorderStatuses(reordered.map(s => s.id));
                     }
                     setDragIdx(null);
@@ -878,11 +970,7 @@ function CategoriesTab() {
                     alignItems: 'flex-start',
                     gap: 12,
                     padding: '12px 14px',
-                    background: isDragged
-                      ? 'color-mix(in srgb, var(--primary-500) 12%, var(--bg-secondary))'
-                      : isDropTarget
-                        ? 'color-mix(in srgb, var(--primary-500) 15%, var(--bg-secondary))'
-                        : `color-mix(in srgb, ${st.color} 8%, var(--bg-secondary))`,
+                    background: bgColor,
                     borderRadius: 'var(--radius-md)',
                     borderLeft: `3px solid ${st.color}`,
                     cursor: 'grab',
@@ -890,8 +978,8 @@ function CategoriesTab() {
                     transition: 'all 0.2s ease',
                     boxShadow: isDropTarget ? '0 0 0 2px var(--primary-400)' : 'none',
                     transform: isDropTarget ? 'scale(1.01)' : 'none',
-                    userSelect: 'none',
-                    position: 'relative',
+                    userSelect: 'none' as const,
+                    position: 'relative' as const,
                   }}
                 >
                   <div style={{
@@ -961,7 +1049,7 @@ function CategoriesTab() {
             });
           })()}
 
-          {/* Special statuses — not draggable */}
+          {/* Special statuses -- not draggable */}
           {specialStatuses.map(st => (
             <div key={st.id} style={{
               display: 'flex',
@@ -1016,7 +1104,7 @@ function CategoriesTab() {
             <input
               type="color"
               value={newStatusColor}
-              onChange={(e) => setNewStatusColor(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewStatusColor(e.target.value)}
               style={{ width: 40, height: 38, padding: 2, cursor: 'pointer', border: '1.5px solid var(--border-default)', borderRadius: 'var(--radius-md)' }}
             />
           </div>
@@ -1025,9 +1113,9 @@ function CategoriesTab() {
             <input
               type="text"
               value={newStatusName}
-              onChange={(e) => setNewStatusName(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewStatusName(e.target.value)}
               placeholder={t('categories.statusNamePlaceholder')}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddStatus()}
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleAddStatus()}
             />
           </div>
           <div className="form-group" style={{ flex: 2, minWidth: 180, marginBottom: 0 }}>
@@ -1035,9 +1123,9 @@ function CategoriesTab() {
             <input
               type="text"
               value={newStatusDesc}
-              onChange={(e) => setNewStatusDesc(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewStatusDesc(e.target.value)}
               placeholder={t('categories.descPlaceholder')}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddStatus()}
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleAddStatus()}
             />
           </div>
           <Button variant="primary" size="md" icon={Plus} onClick={handleAddStatus}>{t('common:add')}</Button>
@@ -1048,17 +1136,18 @@ function CategoriesTab() {
 }
 
 /* ============ USERS & ROLES TAB ============ */
-function UsersTab() {
+
+function UsersTab(): ReactNode {
   const { t } = useTranslation('settings');
   const send = useAppStore(s => s.send);
-  const [users, setUsers] = useState([]);
-  const [activeSubTab, setActiveSubTab] = useState('azure');
-  const [localEmail, setLocalEmail] = useState('');
-  const [localPassword, setLocalPassword] = useState('');
+  const [users, setUsers] = useState<UserItem[]>([]);
+  const [activeSubTab, setActiveSubTab] = useState<'azure' | 'local'>('azure');
+  const [localEmail, setLocalEmail] = useState<string>('');
+  const [localPassword, setLocalPassword] = useState<string>('');
 
   useEffect(() => {
     if (send) {
-      send('users:list', {}).then(setUsers).catch(() => {});
+      send('users:list', {}).then(data => setUsers(data as UserItem[])).catch(() => {});
     }
   }, [send]);
 
@@ -1147,7 +1236,7 @@ function UsersTab() {
                 <input
                   type="email"
                   value={localEmail}
-                  onChange={(e) => setLocalEmail(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocalEmail(e.target.value)}
                   placeholder={t('users.emailPlaceholder')}
                 />
               </div>
@@ -1156,7 +1245,7 @@ function UsersTab() {
                 <input
                   type="password"
                   value={localPassword}
-                  onChange={(e) => setLocalPassword(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocalPassword(e.target.value)}
                   placeholder={t('users.passwordPlaceholder')}
                 />
               </div>
@@ -1172,18 +1261,30 @@ function UsersTab() {
 }
 
 /* ============ VOTING ENGINE TAB ============ */
-function VotingTab({ rules, setRules }) {
+
+interface VotingTabProps {
+  rules: VotingRuleItem[];
+  setRules: (dataOrUpdater: VotingRuleItem[] | ((prev: VotingRuleItem[]) => VotingRuleItem[])) => void;
+}
+
+interface NewVotingRule {
+  category: string;
+  department: string;
+  multiplier: string;
+}
+
+function VotingTab({ rules, setRules }: VotingTabProps): ReactNode {
   const { t } = useTranslation('settings');
   const categories = useAppStore(s => s.categories);
-  const [newRule, setNewRule] = useState({ category: '', department: '', multiplier: '1.5' });
+  const [newRule, setNewRule] = useState<NewVotingRule>({ category: '', department: '', multiplier: '1.5' });
 
   const catsForSelect = categories.filter(c => c.id !== 'all');
 
-  const addRule = () => {
+  const addRule = (): void => {
     if (!newRule.category || !newRule.department || !newRule.multiplier) return;
-    setRules(prev => [...prev, {
+    setRules((prev: VotingRuleItem[]) => [...prev, {
       id: `vr-${Date.now()}`,
-      category: newRule.category,
+      categoryId: newRule.category,
       department: newRule.department,
       multiplier: parseFloat(newRule.multiplier),
       isActive: true,
@@ -1191,17 +1292,17 @@ function VotingTab({ rules, setRules }) {
     setNewRule({ category: '', department: '', multiplier: '1.5' });
   };
 
-  const toggleRule = (id) => {
-    setRules(prev => prev.map(r => r.id === id ? { ...r, isActive: !r.isActive } : r));
+  const toggleRule = (id: string): void => {
+    setRules((prev: VotingRuleItem[]) => prev.map(r => r.id === id ? { ...r, isActive: !r.isActive } : r));
   };
 
-  const deleteRule = (id) => {
-    setRules(prev => prev.filter(r => r.id !== id));
+  const deleteRule = (id: string): void => {
+    setRules((prev: VotingRuleItem[]) => prev.filter(r => r.id !== id));
   };
 
-  const getCatLabel = (cat) => {
-    if (cat && typeof cat === 'object') return cat.label;
-    return categories.find(c => c.id === cat)?.label || cat;
+  const getCatLabel = (cat: unknown): string => {
+    if (cat && typeof cat === 'object' && 'label' in cat) return (cat as { label: string }).label;
+    return categories.find(c => c.id === cat)?.label || String(cat);
   };
 
   return (
@@ -1232,7 +1333,7 @@ function VotingTab({ rules, setRules }) {
           <select
             className="form-select"
             value={newRule.category}
-            onChange={(e) => setNewRule(prev => ({ ...prev, category: e.target.value }))}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNewRule(prev => ({ ...prev, category: e.target.value }))}
             style={{ width: 'auto', minWidth: 140, padding: '6px 30px 6px 10px', fontSize: '0.8125rem' }}
           >
             <option value="">{t('common:select')}</option>
@@ -1246,11 +1347,11 @@ function VotingTab({ rules, setRules }) {
           <select
             className="form-select"
             value={newRule.department}
-            onChange={(e) => setNewRule(prev => ({ ...prev, department: e.target.value }))}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNewRule(prev => ({ ...prev, department: e.target.value }))}
             style={{ width: 'auto', minWidth: 160, padding: '6px 30px 6px 10px', fontSize: '0.8125rem' }}
           >
             <option value="">{t('common:select')}</option>
-            {['Mühendislik', 'Ürün Yönetimi', 'İnsan Kaynakları', 'Güvenlik', 'DevOps', 'Tasarım'].map(d => <option key={d} value={d}>{d}</option>)}
+            {['Muhendislik', 'Urun Yonetimi', 'Insan Kaynaklari', 'Guvenlik', 'DevOps', 'Tasarim'].map(d => <option key={d} value={d}>{d}</option>)}
           </select>
 
           <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--success-600)', fontFamily: 'var(--font-display)' }}>
@@ -1264,8 +1365,8 @@ function VotingTab({ rules, setRules }) {
               min="0.1"
               max="10"
               value={newRule.multiplier}
-              onChange={(e) => setNewRule(prev => ({ ...prev, multiplier: e.target.value }))}
-              style={{ width: 72, padding: '6px 10px', fontSize: '0.875rem', textAlign: 'center', fontWeight: 700 }}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewRule(prev => ({ ...prev, multiplier: e.target.value }))}
+              style={{ width: 72, padding: '6px 10px', fontSize: '0.875rem', textAlign: 'center' as const, fontWeight: 700 }}
             />
             <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>x</span>
           </div>
@@ -1294,7 +1395,7 @@ function VotingTab({ rules, setRules }) {
               <tr key={rule.id} style={{ opacity: rule.isActive ? 1 : 0.5 }}>
                 <td>
                   <Badge color="var(--primary-600)" bg="var(--primary-50)">
-                    {getCatLabel(rule.category)}
+                    {getCatLabel(rule.categoryId)}
                   </Badge>
                 </td>
                 <td style={{ fontWeight: 500 }}>{rule.department}</td>
@@ -1336,13 +1437,21 @@ function VotingTab({ rules, setRules }) {
 }
 
 /* ============ INTEGRATIONS TAB ============ */
-function IntegrationCard({ def, saved, onSave, onRemove }) {
+
+interface IntegrationCardProps {
+  def: IntegrationDef;
+  saved: IntegrationConfig | undefined;
+  onSave: (id: string, config: Record<string, unknown>) => void;
+  onRemove: (id: string) => void;
+}
+
+function IntegrationCard({ def, saved, onSave, onRemove }: IntegrationCardProps): ReactNode {
   const { t } = useTranslation('settings');
-  const formRef = useRef({});
+  const formRef = useRef<Record<string, HTMLInputElement | null>>({});
   const connected = !!saved;
 
-  const handleSave = () => {
-    const values = {};
+  const handleSave = (): void => {
+    const values: Record<string, unknown> = {};
     let hasValue = false;
     for (const field of def.fields) {
       const val = formRef.current[field.key]?.value?.trim() || '';
@@ -1362,7 +1471,7 @@ function IntegrationCard({ def, saved, onSave, onRemove }) {
     toast.success(t('integrations.saved', { name: def.name }));
   };
 
-  const handleRemove = () => {
+  const handleRemove = (): void => {
     onRemove(def.id);
     toast.warning(t('integrations.removed', { name: def.name }));
   };
@@ -1389,10 +1498,10 @@ function IntegrationCard({ def, saved, onSave, onRemove }) {
           <div key={field.key} className="form-group">
             <label className="form-label">{field.label}</label>
             <input
-              ref={el => { formRef.current[field.key] = el; }}
+              ref={(el: HTMLInputElement | null) => { formRef.current[field.key] = el; }}
               type={field.type}
               placeholder={field.placeholder}
-              defaultValue={connected ? (field.type === 'password' ? '••••••••••••' : (saved[field.key] || '')) : ''}
+              defaultValue={connected ? (field.type === 'password' ? '••••••••••••' : (String(saved?.[field.key] || ''))) : ''}
             />
           </div>
         ))}
@@ -1411,14 +1520,16 @@ function IntegrationCard({ def, saved, onSave, onRemove }) {
   );
 }
 
-function IntegrationsTab() {
+interface IntegrationsTabProps {}
+
+function IntegrationsTab(): ReactNode {
   const integrations = useAppStore(s => s.integrations);
   const setIntegration = useAppStore(s => s.setIntegration);
   const removeIntegration = useAppStore(s => s.removeIntegration);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {INTEGRATION_DEFS.map(def => (
+      {INTEGRATION_DEFS.map((def: IntegrationDef) => (
         <IntegrationCard
           key={def.id}
           def={def}

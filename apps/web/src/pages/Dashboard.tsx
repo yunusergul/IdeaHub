@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,13 +10,13 @@ import { MarkdownContent } from '../components/MarkdownContent';
 import NewIdeaModal from '../components/NewIdeaModal';
 import { getStatusLabel } from '../lib/statusHelpers';
 import { IdeaCardSkeleton } from '../components/Skeleton';
+import type { EnrichedIdea, CategoryItem } from '../types';
 
 export default function Dashboard() {
   const { t } = useTranslation('dashboard');
   const ideas = useAppStore(s => s.ideas);
   const ideasTotal = useAppStore(s => s.ideasTotal);
   const ideasHasMore = useAppStore(s => s.ideasHasMore);
-  const ideasLoadingMore = useAppStore(s => s.ideasLoadingMore);
   const loadMoreIdeas = useAppStore(s => s.loadMoreIdeas);
   const statuses = useAppStore(s => s.statusList);
   const selectedStatus = useAppStore(s => s.selectedStatus);
@@ -28,7 +28,7 @@ export default function Dashboard() {
   const loading = useAppStore(s => s.loading);
 
   // Infinite scroll sentinel
-  const sentinelRef = useRef(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const ideasHasMoreRef = useRef(ideasHasMore);
   ideasHasMoreRef.current = ideasHasMore;
   useEffect(() => {
@@ -37,13 +37,13 @@ export default function Dashboard() {
     const scrollRoot = sentinel.closest('main');
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && ideasHasMoreRef.current) loadMoreIdeas();
+        if (entries[0]?.isIntersecting && ideasHasMoreRef.current) loadMoreIdeas();
       },
       { root: scrollRoot, rootMargin: '100px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [loadMoreIdeas, loading]);
+  }, [loadMoreIdeas, loading, ideasHasMore]);
 
   const thisWeekCount = useMemo(() => {
     const weekAgo = new Date();
@@ -65,14 +65,14 @@ export default function Dashboard() {
     const list = [...ideas];
     switch (sortBy) {
       case 'oldest':
-        return list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        return list.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       case 'mostVoted':
         return list.sort((a, b) => (b.upvotes || 0) - (a.upvotes || 0));
       case 'mostCommented':
         return list.sort((a, b) => (b.commentCount || 0) - (a.commentCount || 0));
       case 'newest':
       default:
-        return list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
   }, [ideas, sortBy]);
 
@@ -81,23 +81,23 @@ export default function Dashboard() {
   const location = useLocation();
 
   useEffect(() => {
-    if (location.state?.openNewIdea) {
+    if ((location.state as { openNewIdea?: boolean } | null)?.openNewIdea) {
       setShowNewIdea(true);
       window.history.replaceState({}, '');
     }
   }, [location.state]);
 
-  const getStatus = (idea) => {
+  const getStatus = (idea: EnrichedIdea) => {
     if (idea.status && typeof idea.status === 'object') return idea.status;
     return statuses.find(s => s.id === (idea.statusId || idea.status));
   };
 
-  const getCategory = (idea) => {
+  const getCategory = (idea: EnrichedIdea) => {
     if (idea.category && typeof idea.category === 'object' && idea.category.id) return idea.category;
-    return categories.find(c => c.id === (idea.categoryId || idea.category?.id || idea.category));
+    return categories.find(c => c.id === (idea.categoryId || idea.category?.id || (idea.category as unknown as string)));
   };
 
-  const hasUserVoted = (idea) => {
+  const hasUserVoted = (idea: EnrichedIdea) => {
     if (!currentUser) return false;
     if (idea.votes && Array.isArray(idea.votes)) {
       return idea.votes.some(v => v.userId === currentUser.id);
@@ -108,7 +108,7 @@ export default function Dashboard() {
     return false;
   };
 
-  const formatDate = (dateStr) => {
+  const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
     return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
   };
@@ -434,7 +434,7 @@ export default function Dashboard() {
                     {(idea.attachments?.length || 0) > 0 && (
                       <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
                         <Paperclip size={13} />
-                        {idea.attachments.length}
+                        {idea.attachments!.length}
                       </span>
                     )}
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>

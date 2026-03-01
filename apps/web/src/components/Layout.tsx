@@ -3,24 +3,25 @@ import { NavLink, useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutGrid, Bug, Sparkles, Heart, RefreshCw, Shield,
-  BarChart3, Settings, ClipboardList, Plus, Bell, Search,
+  Settings, ClipboardList, Plus, Bell,
   Menu, X, LogOut, ChevronDown, LayoutList, Grid3X3, Columns3,
   Lightbulb, Rocket, Target, Star, Folder, Globe, Code, Package, Megaphone, Zap
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../stores/appStore';
 import { useAuthStore } from '../stores/authStore';
-import { Avatar, IconButton, SearchInput, Badge } from './UI';
+import { Avatar, IconButton, SearchInput } from './UI';
 import ConnectionStatus from './ConnectionStatus';
 
-const categoryIcons = { LayoutGrid, Bug, Sparkles, Heart, RefreshCw, Shield, Lightbulb, Rocket, Target, Star, Folder, Globe, Code, Package, Megaphone, Zap };
+const categoryIcons: Record<string, LucideIcon> = { LayoutGrid, Bug, Sparkles, Heart, RefreshCw, Shield, Lightbulb, Rocket, Target, Star, Folder, Globe, Code, Package, Megaphone, Zap };
 const MOBILE_BREAKPOINT = 768;
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= MOBILE_BREAKPOINT);
   useEffect(() => {
     const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
-    const handler = (e) => setIsMobile(e.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mql.addEventListener('change', handler);
     return () => mql.removeEventListener('change', handler);
   }, []);
@@ -41,7 +42,6 @@ export default function Layout() {
   const setViewMode = useAppStore(s => s.setViewMode);
   const markNotificationRead = useAppStore(s => s.markNotificationRead);
   const markAllNotificationsRead = useAppStore(s => s.markAllNotificationsRead);
-  const send = useAppStore(s => s.send);
   const logout = useAuthStore(s => s.logout);
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > MOBILE_BREAKPOINT);

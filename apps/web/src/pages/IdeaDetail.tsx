@@ -5,6 +5,7 @@ import {
   ArrowLeft, MessageSquare, FileText, Image, File, Download,
   Share2, MoreHorizontal, ClipboardList, Loader2, Heart, X, ChevronLeft, ChevronRight, Trash2
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useAuthStore } from '../stores/authStore';
 import { wsClient } from '../lib/wsClient';
@@ -14,11 +15,26 @@ import { MarkdownContent } from '../components/MarkdownContent';
 import SurveyModal from '../components/SurveyModal';
 import { useTranslation } from 'react-i18next';
 import { getStatusLabel } from '../lib/statusHelpers';
+import type { EnrichedIdea, EnrichedComment } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
+interface CommentItemProps {
+  comment: EnrichedComment;
+  formatTime: (d: string) => string;
+  onReply: (commentId: string) => void;
+  replyingTo: string | null;
+  onCancelReply: () => void;
+  onSubmitReply: (parentId: string) => void;
+  replyText: string;
+  setReplyText: (text: string) => void;
+  submittingReply: boolean;
+  onLike: (commentId: string, alreadyLiked: boolean) => void;
+  currentUserId: string | undefined;
+}
+
 export default function IdeaDetail() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation('ideas');
   const ideas = useAppStore(s => s.ideas);
@@ -27,27 +43,27 @@ export default function IdeaDetail() {
   const vote = useAppStore(s => s.vote);
   const currentUser = useAuthStore(s => s.user);
   const send = useAppStore(s => s.send);
-  const [showSurveyModal, setShowSurveyModal] = useState(false);
+  const [showSurveyModal, setShowSurveyModal] = useState<boolean>(false);
   const [confirmDelete, confirmDialogProps] = useConfirm();
-  const [comments, setComments] = useState([]);
-  const [commentText, setCommentText] = useState('');
-  const [submittingComment, setSubmittingComment] = useState(false);
-  const [replyingTo, setReplyingTo] = useState(null);
-  const [replyText, setReplyText] = useState('');
-  const [submittingReply, setSubmittingReply] = useState(false);
-  const [lightboxIdx, setLightboxIdx] = useState(null);
+  const [comments, setComments] = useState<EnrichedComment[]>([]);
+  const [commentText, setCommentText] = useState<string>('');
+  const [submittingComment, setSubmittingComment] = useState<boolean>(false);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState<string>('');
+  const [submittingReply, setSubmittingReply] = useState<boolean>(false);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   const loading = useAppStore(s => s.loading);
   const initialized = useAppStore(s => s.initialized);
   const kanbanIdeas = useAppStore(s => s.kanbanIdeas);
-  const [fetchedIdea, setFetchedIdea] = useState(null);
-  const idea = ideas.find(i => i.id === id) || kanbanIdeas.find(i => i.id === id) || fetchedIdea;
+  const [fetchedIdea, setFetchedIdea] = useState<EnrichedIdea | null>(null);
+  const idea: EnrichedIdea | undefined = ideas.find(i => i.id === id) || kanbanIdeas.find(i => i.id === id) || fetchedIdea || undefined;
 
   // Fetch idea from backend if not found in any store
   useEffect(() => {
     if (id && send && initialized && !ideas.find(i => i.id === id) && !kanbanIdeas.find(i => i.id === id)) {
-      send('ideas:get', { ideaId: id }).then(data => {
-        if (data) setFetchedIdea(data);
+      send('ideas:get', { ideaId: id }).then((data) => {
+        if (data) setFetchedIdea(data as EnrichedIdea);
       }).catch(() => {});
     }
   }, [id, send, initialized, ideas, kanbanIdeas]);
@@ -55,15 +71,16 @@ export default function IdeaDetail() {
   // Fetch comments (re-run when idea becomes available after page refresh)
   useEffect(() => {
     if (id && send && idea) {
-      send('comments:list', { ideaId: id }).then(setComments).catch(() => {});
+      send('comments:list', { ideaId: id }).then(data => setComments(data as EnrichedComment[])).catch(() => {});
     }
   }, [id, send, !!idea]);
 
   // Listen for comment changes via wsClient directly
   useEffect(() => {
-    const refreshComments = (data) => {
-      if (data.ideaId === id) {
-        send('comments:list', { ideaId: id }).then(setComments).catch(() => {});
+    const refreshComments = (data: unknown) => {
+      const d = data as { ideaId: string };
+      if (d.ideaId === id) {
+        send('comments:list', { ideaId: id }).then(data => setComments(data as EnrichedComment[])).catch(() => {});
       }
     };
     const unsub1 = wsClient.on('comment:created', refreshComments);
@@ -92,30 +109,23 @@ export default function IdeaDetail() {
 
   const status = typeof idea.status === 'object' ? idea.status : statuses.find(s => s.id === (idea.statusId || idea.status));
   const category = (idea.category && typeof idea.category === 'object') ? idea.category : categories.find(c => c.id === (idea.categoryId || idea.category));
-  const hasVoted = currentUser && (
+  const hasVoted = !!(currentUser && (
     (idea.votes && Array.isArray(idea.votes) && idea.votes.some(v => v.userId === currentUser.id)) ||
     (idea.voters && Array.isArray(idea.voters) && idea.voters.includes(currentUser.id))
-  );
+  ));
   const isAdmin = currentUser?.role === 'admin';
 
   const currentStatusId = status?.id || idea.statusId || idea.status;
-  const statusTimeline = [
-    { id: 'pending', label: t('statusPending'), date: idea.createdAt },
-    { id: 'reviewing', label: t('statusReviewing'), date: null },
-    { id: 'approved', label: t('statusApproved'), date: null },
-    { id: 'in-progress', label: t('statusInProgress'), date: null },
-    { id: 'completed', label: t('statusCompleted'), date: null },
-  ];
 
   // Build timeline from statuses
   const orderedStatuses = [...statuses].sort((a, b) => (a.order || 0) - (b.order || 0)).filter(s => (s.order || 0) > 0);
   const currentIdx = orderedStatuses.findIndex(s => s.id === currentStatusId);
 
-  const fileIcons = { image: Image, pdf: FileText, doc: File };
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
-  const formatTime = (d) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const fileIcons: Record<string, LucideIcon> = { image: Image, pdf: FileText, doc: File };
+  const formatDate = (d: string | null | undefined): string => d ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  const formatTime = (d: string): string => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-  const handleSubmitComment = async () => {
+  const handleSubmitComment = async (): Promise<void> => {
     if (!commentText.trim() || submittingComment) return;
     setSubmittingComment(true);
     try {
@@ -123,25 +133,25 @@ export default function IdeaDetail() {
       setCommentText('');
       // Refetch comments to show the new one
       const updated = await send('comments:list', { ideaId: id });
-      setComments(updated);
+      setComments(updated as EnrichedComment[]);
     } catch (err) {
-      toast.error(err.message || t('commentFailed'));
+      toast.error((err as Error).message || t('commentFailed'));
     } finally {
       setSubmittingComment(false);
     }
   };
 
-  const handleReply = (commentId) => {
+  const handleReply = (commentId: string): void => {
     setReplyingTo(commentId);
     setReplyText('');
   };
 
-  const handleCancelReply = () => {
+  const handleCancelReply = (): void => {
     setReplyingTo(null);
     setReplyText('');
   };
 
-  const handleSubmitReply = async (parentId) => {
+  const handleSubmitReply = async (parentId: string): Promise<void> => {
     if (!replyText.trim() || submittingReply) return;
     setSubmittingReply(true);
     try {
@@ -149,22 +159,22 @@ export default function IdeaDetail() {
       setReplyingTo(null);
       setReplyText('');
       const updated = await send('comments:list', { ideaId: id });
-      setComments(updated);
+      setComments(updated as EnrichedComment[]);
     } catch (err) {
-      toast.error(err.message || t('replyFailed'));
+      toast.error((err as Error).message || t('replyFailed'));
     } finally {
       setSubmittingReply(false);
     }
   };
 
-  const handleLike = async (commentId, alreadyLiked) => {
+  const handleLike = async (commentId: string, alreadyLiked: boolean): Promise<void> => {
     try {
       const action = alreadyLiked ? 'comments:unlike' : 'comments:like';
       await send(action, { commentId });
       const updated = await send('comments:list', { ideaId: id });
-      setComments(updated);
+      setComments(updated as EnrichedComment[]);
     } catch (err) {
-      toast.error(err.message || t('likeFailed'));
+      toast.error((err as Error).message || t('likeFailed'));
     }
   };
 
@@ -350,7 +360,7 @@ export default function IdeaDetail() {
                           const url = URL.createObjectURL(blob);
                           const a = document.createElement('a');
                           a.href = url;
-                          a.download = att.filename || att.name;
+                          a.download = att.filename || att.name || 'download';
                           a.click();
                           URL.revokeObjectURL(url);
                         } catch {
@@ -385,7 +395,7 @@ export default function IdeaDetail() {
               <div style={{ flex: 1 }}>
                 <textarea
                   value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setCommentText(e.target.value)}
                   placeholder={t('commentPlaceholder')}
                   style={{
                     width: '100%',
@@ -545,7 +555,7 @@ export default function IdeaDetail() {
             {/* Prev */}
             {images.length > 1 && (
               <button
-                onClick={(e) => { e.stopPropagation(); setLightboxIdx((lightboxIdx - 1 + images.length) % images.length); }}
+                onClick={(e: React.MouseEvent) => { e.stopPropagation(); setLightboxIdx((lightboxIdx - 1 + images.length) % images.length); }}
                 style={{
                   position: 'absolute',
                   left: 16,
@@ -567,7 +577,7 @@ export default function IdeaDetail() {
 
             {/* Image */}
             <img
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
               src={API_URL + current.url}
               alt={current.filename || current.name}
               style={{
@@ -582,7 +592,7 @@ export default function IdeaDetail() {
             {/* Next */}
             {images.length > 1 && (
               <button
-                onClick={(e) => { e.stopPropagation(); setLightboxIdx((lightboxIdx + 1) % images.length); }}
+                onClick={(e: React.MouseEvent) => { e.stopPropagation(); setLightboxIdx((lightboxIdx + 1) % images.length); }}
                 style={{
                   position: 'absolute',
                   right: 16,
@@ -621,12 +631,12 @@ export default function IdeaDetail() {
   );
 }
 
-function CommentItem({ comment, formatTime, onReply, replyingTo, onCancelReply, onSubmitReply, replyText, setReplyText, submittingReply, onLike, currentUserId }) {
+function CommentItem({ comment, formatTime, onReply, replyingTo, onCancelReply, onSubmitReply, replyText, setReplyText, submittingReply, onLike, currentUserId }: CommentItemProps) {
   const { t } = useTranslation('ideas');
-  const author = comment.author || comment.user || {};
+  const author = comment.author || comment.user || { name: '', initials: '' };
   const isReplying = replyingTo === comment.id;
   const likes = comment.likes || [];
-  const hasLiked = currentUserId && likes.some(l => l.userId === currentUserId);
+  const hasLiked = !!(currentUserId && likes.some(l => l.userId === currentUserId));
   const likeCount = comment.likeCount || likes.length;
 
   return (
@@ -663,7 +673,7 @@ function CommentItem({ comment, formatTime, onReply, replyingTo, onCancelReply, 
           <div style={{ marginTop: 10 }}>
             <textarea
               value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReplyText(e.target.value)}
               placeholder={t('replyPlaceholder')}
               autoFocus
               style={{

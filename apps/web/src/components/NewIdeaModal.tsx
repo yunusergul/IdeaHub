@@ -2,12 +2,27 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, X, FileText, Image, File, Sparkles, AlertCircle, Loader2 } from 'lucide-react';
-import { Modal, Button, Badge } from './UI';
+import type { LucideIcon } from 'lucide-react';
+import { Modal, Button } from './UI';
 import { useAppStore } from '../stores/appStore';
 import { useAuthStore } from '../stores/authStore';
 import { uploadFile } from '../lib/api';
+import type { EnrichedIdea } from '../types';
 
-export default function NewIdeaModal({ isOpen, onClose }) {
+interface FileItem {
+  id: string;
+  name: string;
+  size: string;
+  type: string;
+  file: File;
+}
+
+interface NewIdeaModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export default function NewIdeaModal({ isOpen, onClose }: NewIdeaModalProps) {
   const { t } = useTranslation('ideas');
   const categories = useAppStore(s => s.categories);
   const addIdea = useAppStore(s => s.addIdea);
@@ -16,13 +31,13 @@ export default function NewIdeaModal({ isOpen, onClose }) {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
   const [content, setContent] = useState('');
-  const [files, setFiles] = useState([]);
-  const [suggestions, setSuggestions] = useState([]);
+  const [files, setFiles] = useState<FileItem[]>([]);
+  const [suggestions, setSuggestions] = useState<EnrichedIdea[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const fileInputRef = useRef(null);
-  const titleRef = useRef(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
 
   // AI suggestion simulation - check against loaded ideas
   useEffect(() => {
@@ -46,25 +61,25 @@ export default function NewIdeaModal({ isOpen, onClose }) {
     return () => clearTimeout(timer);
   }, [title, ideas]);
 
-  const handleDrop = (e) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragActive(false);
     const dropped = Array.from(e.dataTransfer.files);
     addFiles(dropped);
   };
 
-  const addFiles = (newFiles) => {
-    const mapped = newFiles.map(f => ({
+  const addFiles = (newFiles: File[]) => {
+    const mapped: FileItem[] = newFiles.map(f => ({
       id: `f${Date.now()}-${Math.random()}`,
       name: f.name,
       size: `${(f.size / 1024).toFixed(0)} KB`,
       type: f.type.startsWith('image/') ? 'image' : f.name.endsWith('.pdf') ? 'pdf' : 'doc',
-      file: f, // Keep the actual File object for upload
+      file: f,
     }));
     setFiles(prev => [...prev, ...mapped]);
   };
 
-  const removeFile = (id) => {
+  const removeFile = (id: string) => {
     setFiles(prev => prev.filter(f => f.id !== id));
   };
 
@@ -72,13 +87,12 @@ export default function NewIdeaModal({ isOpen, onClose }) {
     if (!title.trim() || !category || submitting) return;
     setSubmitting(true);
     try {
-      // Upload files first if any
-      let attachmentIds = [];
+      let attachmentIds: string[] = [];
       if (files.length > 0 && accessToken) {
         const uploads = await Promise.all(
           files.map(f => uploadFile(f.file, accessToken).catch(() => null))
         );
-        attachmentIds = uploads.filter(Boolean).map(u => u.id);
+        attachmentIds = uploads.filter(Boolean).map(u => u!.id);
       }
 
       await addIdea({
@@ -101,8 +115,8 @@ export default function NewIdeaModal({ isOpen, onClose }) {
     }
   };
 
-  const fileIcons = { image: Image, pdf: FileText, doc: File };
-  const fileColors = { image: 'file-item__icon--image', pdf: 'file-item__icon--pdf', doc: 'file-item__icon--doc' };
+  const fileIcons: Record<string, LucideIcon> = { image: Image, pdf: FileText, doc: File };
+  const fileColors: Record<string, string> = { image: 'file-item__icon--image', pdf: 'file-item__icon--pdf', doc: 'file-item__icon--doc' };
 
   const filteredCategories = categories.filter(c => c.id !== 'all');
 
@@ -292,7 +306,7 @@ export default function NewIdeaModal({ isOpen, onClose }) {
             type="file"
             multiple
             style={{ display: 'none' }}
-            onChange={(e) => addFiles(Array.from(e.target.files))}
+            onChange={(e) => addFiles(Array.from(e.target.files || []))}
           />
         </div>
 

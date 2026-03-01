@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, X, Trash2, Loader2, Search, Clock, Zap, ArrowRight } from 'lucide-react';
+import { Plus, X, Trash2, Loader2, Search, Clock, Zap } from 'lucide-react';
 import { Modal, Button } from './UI';
 import { useAppStore } from '../stores/appStore';
+import type { EnrichedIdea } from '../types';
 
 const DEPARTMENT_KEYS = [
   'deptEngineering',
@@ -13,7 +14,13 @@ const DEPARTMENT_KEYS = [
   'deptDesign',
 ];
 
-export default function SurveyModal({ isOpen, onClose, idea }) {
+interface SurveyModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  idea?: EnrichedIdea | null;
+}
+
+export default function SurveyModal({ isOpen, onClose, idea }: SurveyModalProps) {
   const { t } = useTranslation('surveys');
   const send = useAppStore(s => s.send);
   const ideas = useAppStore(s => s.ideas);
@@ -34,11 +41,11 @@ export default function SurveyModal({ isOpen, onClose, idea }) {
   const [surveyType, setSurveyType] = useState('poll');
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState(['', '']);
-  const [selectedDeptKeys, setSelectedDeptKeys] = useState([]);
+  const [selectedDeptKeys, setSelectedDeptKeys] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   // Development-specific state
-  const [selectedIdeaIds, setSelectedIdeaIds] = useState([]);
+  const [selectedIdeaIds, setSelectedIdeaIds] = useState<string[]>([]);
   const [ideaSearch, setIdeaSearch] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [autoTransition, setAutoTransition] = useState(false);
@@ -66,22 +73,22 @@ export default function SurveyModal({ isOpen, onClose, idea }) {
 
   const addOption = () => setOptions(prev => [...prev, '']);
 
-  const updateOption = (i, val) => {
+  const updateOption = (i: number, val: string) => {
     setOptions(prev => prev.map((o, idx) => idx === i ? val : o));
   };
 
-  const removeOption = (i) => {
+  const removeOption = (i: number) => {
     if (options.length <= 2) return;
     setOptions(prev => prev.filter((_, idx) => idx !== i));
   };
 
-  const toggleDept = (deptKey) => {
+  const toggleDept = (deptKey: string) => {
     setSelectedDeptKeys(prev =>
       prev.includes(deptKey) ? prev.filter(d => d !== deptKey) : [...prev, deptKey]
     );
   };
 
-  const toggleIdea = (ideaId) => {
+  const toggleIdea = (ideaId: string) => {
     setSelectedIdeaIds(prev =>
       prev.includes(ideaId) ? prev.filter(id => id !== ideaId) : [...prev, ideaId]
     );
@@ -116,7 +123,7 @@ export default function SurveyModal({ isOpen, onClose, idea }) {
     setSubmitting(true);
     try {
       const selectedDeptLabels = selectedDeptKeys.map(key => t(key));
-      const payload = {
+      const payload: Record<string, unknown> = {
         title: idea ? `${idea.title} - ${t('surveySuffix')}` : question,
         question,
         type: surveyType,
@@ -370,8 +377,8 @@ export default function SurveyModal({ isOpen, onClose, idea }) {
                     color: 'var(--text-primary)',
                     transition: 'background 100ms',
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-primary)'}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-secondary)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-primary)'; }}
                 >
                   <div style={{ fontWeight: 600 }}>{i.title}</div>
                   {i.summary && (

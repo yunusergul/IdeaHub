@@ -9,8 +9,16 @@ import {
 import { useAppStore } from '../stores/appStore';
 import { useAuthStore } from '../stores/authStore';
 import { Badge, Button, ConfirmDialog, useConfirm } from '../components/UI';
+import type { EnrichedSurvey } from '../types';
 
-function StarRating({ rating, onRate, readonly = false, size = 24 }) {
+interface StarRatingProps {
+  rating: number;
+  onRate: (star: number) => void;
+  readonly?: boolean;
+  size?: number;
+}
+
+function StarRating({ rating, onRate, readonly = false, size = 24 }: StarRatingProps) {
   const [hover, setHover] = useState(0);
 
   return (
@@ -70,7 +78,7 @@ export default function SurveyDetail() {
 
   const isDevelopment = survey.type === 'development';
 
-  const getOptionVotes = (opt) => {
+  const getOptionVotes = (opt: EnrichedSurvey['options'][number]): number => {
     if (typeof opt.votes === 'number') return opt.votes;
     if (Array.isArray(opt.votes)) return opt.votes.length;
     return 0;
@@ -80,7 +88,7 @@ export default function SurveyDetail() {
 
   const hasVoted = (() => {
     if (survey.votedBy && Array.isArray(survey.votedBy)) {
-      return survey.votedBy.includes(currentUser?.id);
+      return survey.votedBy.includes(currentUser?.id ?? '');
     }
     return survey.options.some(opt =>
       Array.isArray(opt.votes) && opt.votes.some(v => v.userId === currentUser?.id)
@@ -89,7 +97,7 @@ export default function SurveyDetail() {
 
   const userRating = (() => {
     if (survey.ratings && !Array.isArray(survey.ratings) && currentUser) {
-      return survey.ratings[currentUser.id] || 0;
+      return (survey.ratings as Record<string, number>)[currentUser.id] || 0;
     }
     if (Array.isArray(survey.ratings) && currentUser) {
       const r = survey.ratings.find(r => r.userId === currentUser.id);
@@ -110,12 +118,12 @@ export default function SurveyDetail() {
   const ratingCount = Array.isArray(survey.ratings) ? survey.ratings.length : (survey.ratingCount || 0);
   const targetDepts = survey.targetDepartments || [];
 
-  // Find winning option for completed development surveys
-  const winningOption = isDevelopment && !survey.isActive && survey.options.length > 0
+  const firstOption = survey.options[0];
+  const winningOption = isDevelopment && !survey.isActive && firstOption
     ? survey.options.reduce((best, opt) => {
         const votes = getOptionVotes(opt);
         return votes > getOptionVotes(best) ? opt : best;
-      }, survey.options[0])
+      }, firstOption)
     : null;
 
   return (
@@ -318,10 +326,10 @@ export default function SurveyDetail() {
                   ...(isWinner ? { border: '1.5px solid var(--success-300)', background: 'var(--success-50)' } : {}),
                 }}
                 onMouseEnter={(e) => {
-                  if (survey.isActive && !hasVoted) e.currentTarget.style.transform = 'scale(1.01)';
+                  if (survey.isActive && !hasVoted) (e.currentTarget as HTMLElement).style.transform = 'scale(1.01)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'scale(1)';
+                  (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
                 }}
               >
                 <div className="survey-bar__header">
@@ -345,7 +353,7 @@ export default function SurveyDetail() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/dashboard/idea/${opt.idea.id}`);
+                          navigate(`/dashboard/idea/${opt.idea!.id}`);
                         }}
                         style={{
                           background: 'none',
@@ -461,7 +469,7 @@ export default function SurveyDetail() {
             {survey.createdBy && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
                 <User size={14} />
-                {survey.createdBy.name || survey.createdBy}
+                {typeof survey.createdBy === 'string' ? survey.createdBy : survey.createdBy.name}
               </div>
             )}
           </div>

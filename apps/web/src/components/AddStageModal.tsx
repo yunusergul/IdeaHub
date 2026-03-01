@@ -14,20 +14,27 @@ const presetColors = [
   { color: '#14b8a6', bg: '#f0fdfa' },
 ];
 
-export default function AddStageModal({ isOpen, onClose }) {
+interface AddStageModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export default function AddStageModal({ isOpen, onClose }: AddStageModalProps) {
   const { t } = useTranslation('settings');
   const { t: tCommon } = useTranslation('common');
   const addStatus = useAppStore(s => s.addStatus);
   const [label, setLabel] = useState('');
   const [selectedColor, setSelectedColor] = useState(0);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!label.trim()) return;
+    const preset = presetColors[selectedColor];
+    if (!preset) return;
     addStatus({
       label: label.trim(),
-      color: presetColors[selectedColor].color,
-      bg: presetColors[selectedColor].bg,
+      color: preset.color,
+      bg: preset.bg,
     });
     setLabel('');
     setSelectedColor(0);
