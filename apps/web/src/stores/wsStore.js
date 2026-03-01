@@ -143,6 +143,17 @@ export function setupEventRouting(appStore) {
     }).catch(() => {});
   });
 
+  wsClient.on('category:updated', () => {
+    wsClient.send('categories:list', {}).then(data => {
+      appStore.setState({
+        categories: [
+          { id: 'all', label: i18n.t('common:all'), icon: 'LayoutGrid', color: 'var(--text-tertiary)' },
+          ...data,
+        ],
+      });
+    }).catch(() => {});
+  });
+
   wsClient.on('settings:updated', (data) => {
     appStore.getState().setAppSettings(data);
   });

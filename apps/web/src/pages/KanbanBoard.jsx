@@ -8,6 +8,7 @@ import { useAuthStore } from '../stores/authStore';
 import { Avatar } from '../components/UI';
 import SprintAssignModal from '../components/SprintAssignModal';
 import { getStatusLabel } from '../lib/statusHelpers';
+import { KanbanCardSkeleton } from '../components/Skeleton';
 
 function daysAgo(dateStr, t) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -85,9 +86,11 @@ function KanbanColumnSentinel({ statusId, loading, onIntersect }) {
   }, [statusId, loading, onIntersect]);
 
   return (
-    <div ref={ref} style={{ padding: 8, textAlign: 'center' }}>
+    <div ref={ref} style={{ padding: loading ? 0 : 8 }}>
       {loading && (
-        <span style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>...</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {Array.from({ length: 2 }).map((_, i) => <KanbanCardSkeleton key={i} />)}
+        </div>
       )}
     </div>
   );

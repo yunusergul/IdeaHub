@@ -666,11 +666,10 @@ function CategoriesTab() {
   const [dragIdx, setDragIdx] = useState(null);
   const [overIdx, setOverIdx] = useState(null);
   const categories = useAppStore(s => s.categories);
-  const [cats, setCats] = useState([]);
+  const storeAddCategory = useAppStore(s => s.addCategory);
+  const storeRemoveCategory = useAppStore(s => s.removeCategory);
+  const cats = categories.filter(c => c.id !== 'all');
 
-  useEffect(() => {
-    setCats(categories.filter(c => c.id !== 'all'));
-  }, [categories]);
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState('#6366f1');
   const [newCatIcon, setNewCatIcon] = useState('LayoutGrid');
@@ -682,15 +681,25 @@ function CategoriesTab() {
   const [newStatusColor, setNewStatusColor] = useState('#6366f1');
   const [newStatusDesc, setNewStatusDesc] = useState('');
 
-  const addCategory = () => {
+  const addCategory = async () => {
     if (!newCatName.trim()) return;
-    setCats(prev => [...prev, { id: `cat-${Date.now()}`, label: newCatName, icon: newCatIcon, color: newCatColor }]);
-    setNewCatName('');
-    setNewCatColor('#6366f1');
-    setNewCatIcon('LayoutGrid');
+    try {
+      await storeAddCategory({ label: newCatName.trim(), icon: newCatIcon, color: newCatColor });
+      setNewCatName('');
+      setNewCatColor('#6366f1');
+      setNewCatIcon('LayoutGrid');
+    } catch (err) {
+      console.error('Failed to create category:', err);
+    }
   };
 
-  const removeCategory = (id) => setCats(prev => prev.filter(c => c.id !== id));
+  const removeCategory = async (id) => {
+    try {
+      await storeRemoveCategory(id);
+    } catch (err) {
+      console.error('Failed to delete category:', err);
+    }
+  };
 
   const handleAddStatus = () => {
     if (!newStatusName.trim()) return;

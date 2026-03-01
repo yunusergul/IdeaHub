@@ -57,6 +57,8 @@ const actionHandlers: Record<string, ActionHandler> = {
   [WS_ACTIONS.STATUSES_REORDER]: handleStatuses.reorder,
 
   [WS_ACTIONS.CATEGORIES_LIST]: handleCategories.list,
+  [WS_ACTIONS.CATEGORIES_CREATE]: handleCategories.create,
+  [WS_ACTIONS.CATEGORIES_DELETE]: handleCategories.delete,
 
   [WS_ACTIONS.NOTIFICATIONS_LIST]: handleNotifications.list,
   [WS_ACTIONS.NOTIFICATIONS_MARK_READ]: handleNotifications.markRead,

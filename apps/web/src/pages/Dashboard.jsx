@@ -2,13 +2,14 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, Paperclip, TrendingUp, Loader2, SlidersHorizontal, Filter, X, ChevronDown } from 'lucide-react';
+import { MessageSquare, Paperclip, TrendingUp, SlidersHorizontal, Filter, X, ChevronDown } from 'lucide-react';
 import { useAppStore } from '../stores/appStore';
 import { useAuthStore } from '../stores/authStore';
 import { Avatar, Badge, VoteControl } from '../components/UI';
 import { MarkdownContent } from '../components/MarkdownContent';
 import NewIdeaModal from '../components/NewIdeaModal';
 import { getStatusLabel } from '../lib/statusHelpers';
+import { IdeaCardSkeleton } from '../components/Skeleton';
 
 export default function Dashboard() {
   const { t } = useTranslation('dashboard');
@@ -33,11 +34,12 @@ export default function Dashboard() {
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
+    const scrollRoot = sentinel.closest('main');
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && ideasHasMoreRef.current) loadMoreIdeas();
       },
-      { rootMargin: '600px' }
+      { root: scrollRoot, rootMargin: '100px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
@@ -113,10 +115,19 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 64 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <Loader2 size={24} style={{ color: 'var(--primary-500)', animation: 'spin 1s linear infinite' }} />
-          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{t('loading')}</span>
+      <div style={{ padding: 'clamp(16px, 3vw, 24px) clamp(12px, 3vw, 32px)', maxWidth: 1200, margin: '0 auto' }}>
+        {/* Skeleton header */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ width: 180, height: 24, borderRadius: 'var(--radius-md)', background: 'linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite ease-in-out' }} />
+          <div style={{ width: 120, height: 14, borderRadius: 'var(--radius-sm)', background: 'linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite ease-in-out', marginTop: 8 }} />
+        </div>
+        <div style={{
+          display: viewMode === 'grid' ? 'grid' : 'flex',
+          gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(min(340px, 100%), 1fr))' : undefined,
+          flexDirection: viewMode === 'feed' ? 'column' : undefined,
+          gap: 16,
+        }}>
+          {Array.from({ length: 6 }).map((_, i) => <IdeaCardSkeleton key={i} />)}
         </div>
       </div>
     );
@@ -342,7 +353,7 @@ export default function Dashboard() {
               className="card"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: i * 0.04 }}
+              transition={{ duration: 0.3, delay: i < 20 ? i * 0.04 : 0 }}
               style={{
                 padding: '20px',
                 cursor: 'pointer',
@@ -438,12 +449,21 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Infinite scroll sentinel - always rendered so observer stays attached */}
-      <div ref={sentinelRef} style={{ display: 'flex', justifyContent: 'center', padding: ideasHasMore ? 24 : 0 }}>
-        {ideasLoadingMore && (
-          <Loader2 size={20} style={{ color: 'var(--primary-500)', animation: 'spin 1s linear infinite' }} />
-        )}
-      </div>
+      {/* Infinite scroll: sentinel triggers load, skeletons stay visible until data arrives */}
+      {ideasHasMore && (
+        <>
+          <div ref={sentinelRef} style={{ height: 1 }} />
+          <div style={{
+            display: viewMode === 'grid' ? 'grid' : 'flex',
+            gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(min(340px, 100%), 1fr))' : undefined,
+            flexDirection: viewMode === 'feed' ? 'column' : undefined,
+            gap: 16,
+            marginTop: 16,
+          }}>
+            {Array.from({ length: 3 }).map((_, i) => <IdeaCardSkeleton key={i} />)}
+          </div>
+        </>
+      )}
 
       <NewIdeaModal isOpen={showNewIdea} onClose={() => setShowNewIdea(false)} />
     </div>

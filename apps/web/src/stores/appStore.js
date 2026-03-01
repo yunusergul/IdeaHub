@@ -193,6 +193,31 @@ export const useAppStore = create((set, get) => ({
 
   resetInitialized: () => set({ initialized: false }),
 
+  // --- Categories ---
+
+  addCategory: async ({ label, icon, color }) => {
+    const category = await _send('categories:create', { label, icon, color });
+    set(s => ({
+      categories: [
+        ...s.categories.filter(c => c.id !== 'all'),
+        category,
+      ].sort((a, b) => a.label.localeCompare(b.label))
+        .reduce((acc, c) => {
+          if (acc.length === 0) acc.push({ id: 'all', label: i18n.t('common:all'), icon: 'LayoutGrid', color: 'var(--text-tertiary)' });
+          acc.push(c);
+          return acc;
+        }, []),
+    }));
+    return category;
+  },
+
+  removeCategory: async (categoryId) => {
+    await _send('categories:delete', { categoryId });
+    set(s => ({
+      categories: s.categories.filter(c => c.id !== categoryId),
+    }));
+  },
+
   // --- Pagination ---
 
   loadMoreIdeas: async () => {

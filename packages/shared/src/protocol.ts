@@ -116,6 +116,8 @@ export const WS_ACTIONS = {
 
   // Categories
   CATEGORIES_LIST: 'categories:list',
+  CATEGORIES_CREATE: 'categories:create',
+  CATEGORIES_DELETE: 'categories:delete',
 
   // Notifications
   NOTIFICATIONS_LIST: 'notifications:list',
@@ -161,6 +163,7 @@ export const WS_EVENTS = {
   SURVEY_DELETED: 'survey:deleted',
   SPRINT_UPDATED: 'sprint:updated',
   STATUS_UPDATED: 'status:updated',
+  CATEGORY_UPDATED: 'category:updated',
   NOTIFICATION_NEW: 'notification:new',
   USER_UPDATED: 'user:updated',
   SETTINGS_UPDATED: 'settings:updated',

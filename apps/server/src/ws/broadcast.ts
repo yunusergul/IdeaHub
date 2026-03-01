@@ -42,6 +42,11 @@ const TABLE_EVENT_MAP: Record<string, Record<string, string>> = {
     UPDATE: WS_EVENTS.STATUS_UPDATED,
     DELETE: WS_EVENTS.STATUS_UPDATED,
   },
+  categories: {
+    INSERT: WS_EVENTS.CATEGORY_UPDATED,
+    UPDATE: WS_EVENTS.CATEGORY_UPDATED,
+    DELETE: WS_EVENTS.CATEGORY_UPDATED,
+  },
   notifications: {
     INSERT: WS_EVENTS.NOTIFICATION_NEW,
   },
@@ -68,6 +73,8 @@ function getChannels(table: string, id: string, data?: Record<string, unknown>):
       return ['sprints'];
     case 'statuses':
       return ['statuses'];
+    case 'categories':
+      return ['ideas'];
     default:
       return [];
   }

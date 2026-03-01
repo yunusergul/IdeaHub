@@ -228,6 +228,11 @@ input::placeholder, textarea::placeholder {
   to { transform: rotate(360deg); }
 }
 
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .spinner {
   width: 24px;
   height: 24px;

@@ -242,7 +242,7 @@ export default function IdeaDetail() {
                 navigator.clipboard.writeText(window.location.href);
                 toast.success(t('linkCopied'));
               }}>{t('share')}</Button>
-              {isAdmin && (
+              {(isAdmin || currentUser?.id === idea.authorId) && (
                 <Button
                   variant="ghost"
                   size="sm"

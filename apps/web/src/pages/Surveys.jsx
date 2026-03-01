@@ -6,6 +6,7 @@ import { ClipboardList, Star, CheckCircle, BarChart3, Loader2, SlidersHorizontal
 import { useAppStore } from '../stores/appStore';
 import { useAuthStore } from '../stores/authStore';
 import { Badge, Button } from '../components/UI';
+import { SurveyCardSkeleton } from '../components/Skeleton';
 
 function StarRating({ rating, onRate, readonly = false, size = 20 }) {
   const [hover, setHover] = useState(0);
@@ -72,11 +73,12 @@ export default function Surveys() {
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
+    const scrollRoot = sentinel.closest('main');
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && surveysHasMoreRef.current) loadMoreSurveys();
       },
-      { rootMargin: '600px' }
+      { root: scrollRoot, rootMargin: '100px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
@@ -597,12 +599,15 @@ export default function Surveys() {
         })}
       </div>
 
-      {/* Infinite scroll sentinel - always rendered so observer stays attached */}
-      <div ref={sentinelRef} style={{ display: 'flex', justifyContent: 'center', padding: surveysHasMore ? 24 : 0 }}>
-        {surveysLoadingMore && (
-          <Loader2 size={20} style={{ color: 'var(--primary-500)', animation: 'spin 1s linear infinite' }} />
-        )}
-      </div>
+      {/* Infinite scroll: sentinel triggers load, skeletons stay visible until data arrives */}
+      {surveysHasMore && (
+        <>
+          <div ref={sentinelRef} style={{ height: 1 }} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(340px, 100%), 1fr))', gap: 16, marginTop: 16 }}>
+            {Array.from({ length: 3 }).map((_, i) => <SurveyCardSkeleton key={i} />)}
+          </div>
+        </>
+      )}
     </div>
   );
 }
