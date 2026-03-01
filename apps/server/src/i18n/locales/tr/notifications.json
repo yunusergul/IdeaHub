@@ -1,0 +1,6 @@
+{
+  "statusChanged": "Fikrinizin durumu \"{{status}}\" olarak g\u00fcncellendi",
+  "newComment": "{{name}} \"{{title}}\" fikrinize yorum yapt\u0131",
+  "newVote": "{{name}} \"{{title}}\" fikrinizi be\u011fendi",
+  "newSurvey": "Yeni anket: {{title}}"
+}

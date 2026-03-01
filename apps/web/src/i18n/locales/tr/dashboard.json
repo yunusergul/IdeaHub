@@ -1,0 +1,11 @@
+{
+  "title": "Fikirler",
+  "ideasListed": "{{count}} fikir listeleniyor",
+  "thisWeek": "Bu hafta +{{count}} yeni fikir",
+  "loadingIdeas": "Fikirler yükleniyor...",
+  "sortBy": "Sırala: {{label}}",
+  "newest": "En Yeni",
+  "oldest": "En Eski",
+  "mostVoted": "En Çok Oylanan",
+  "mostCommented": "En Çok Yorumlanan"
+}

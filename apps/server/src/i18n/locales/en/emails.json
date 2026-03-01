@@ -1,0 +1,16 @@
+{
+  "footer": "This email was sent by the IdeaHub notification system.",
+  "commentSubject": "\ud83d\udcac {{name}} commented on your idea",
+  "commentTitle": "New Comment",
+  "commentBody": "<strong>{{name}}</strong> commented on your idea \"<em>{{title}}</em>\":",
+  "voteSubject": "\ud83d\udc4d {{name}} liked your idea",
+  "voteTitle": "New Vote",
+  "voteBody": "<strong>{{name}}</strong> liked your idea \"<em>{{title}}</em>\".",
+  "statusSubject": "\ud83d\udd04 Your idea's status changed: {{status}}",
+  "statusTitle": "Status Change",
+  "statusBody": "Your idea \"<em>{{title}}</em>\" status has been updated to <strong>{{status}}</strong>.",
+  "surveySubject": "\ud83d\udcca New survey: {{title}}",
+  "surveyTitle": "New Survey",
+  "surveyBody": "<strong>{{creator}}</strong> created a new survey: \"<em>{{title}}</em>\"",
+  "surveyAction": "Sign in to IdeaHub to share your opinion."
+}

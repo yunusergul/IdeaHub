@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: ideahub-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ideahub
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ideahub"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: ideahub-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  minio:
+    image: minio/minio:latest
+    container_name: ideahub-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: ideahub-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin;
+      mc mb --ignore-existing local/ideahub-uploads;
+      mc anonymous set download local/ideahub-uploads;
+      exit 0;
+      "
+
+volumes:
+  pgdata:
+  minio-data:

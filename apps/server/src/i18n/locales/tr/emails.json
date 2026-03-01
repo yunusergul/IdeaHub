@@ -1,0 +1,16 @@
+{
+  "footer": "Bu e-posta IdeaHub bildirim sistemi taraf\u0131ndan g\u00f6nderilmi\u015ftir.",
+  "commentSubject": "\ud83d\udcac {{name}} fikrinize yorum yapt\u0131",
+  "commentTitle": "Yeni Yorum",
+  "commentBody": "<strong>{{name}}</strong> \"<em>{{title}}</em>\" ba\u015fl\u0131kl\u0131 fikrinize yorum yapt\u0131:",
+  "voteSubject": "\ud83d\udc4d {{name}} fikrinizi be\u011fendi",
+  "voteTitle": "Yeni Oy",
+  "voteBody": "<strong>{{name}}</strong> \"<em>{{title}}</em>\" ba\u015fl\u0131kl\u0131 fikrinizi be\u011fendi.",
+  "statusSubject": "\ud83d\udd04 Fikrinizin durumu de\u011fi\u015fti: {{status}}",
+  "statusTitle": "Durum De\u011fi\u015fikli\u011fi",
+  "statusBody": "\"<em>{{title}}</em>\" ba\u015fl\u0131kl\u0131 fikrinizin durumu <strong>{{status}}</strong> olarak g\u00fcncellendi.",
+  "surveySubject": "\ud83d\udcca Yeni anket: {{title}}",
+  "surveyTitle": "Yeni Anket",
+  "surveyBody": "<strong>{{creator}}</strong> yeni bir anket olu\u015fturdu: \"<em>{{title}}</em>\"",
+  "surveyAction": "G\u00f6r\u00fc\u015f\u00fcn\u00fcz\u00fc bildirmek i\u00e7in IdeaHub'a giri\u015f yap\u0131n."
+}

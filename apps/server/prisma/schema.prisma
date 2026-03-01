@@ -1,0 +1,329 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  product_manager
+  user
+}
+
+enum VoteType {
+  up
+  down
+}
+
+enum SurveyType {
+  poll
+  rating
+  development
+}
+
+enum NotificationType {
+  comment
+  upvote
+  status
+  survey
+  mention
+  system
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  role         UserRole @default(user)
+  department   String
+  azureId      String?  @unique @map("azure_id")
+  githubId     String?  @unique @map("github_id")
+  passwordHash String?  @map("password_hash")
+  initials     String
+  avatar       String?
+  locale       String   @default("tr")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  ideas          Idea[]
+  votes          Vote[]
+  comments       Comment[]
+  commentLikes   CommentLike[]
+  attachments    Attachment[]
+  surveysCreated Survey[]        @relation("SurveyCreator")
+  surveyVotes    SurveyVote[]
+  surveyRatings  SurveyRating[]
+  notifications  Notification[]
+  refreshTokens  RefreshToken[]
+  preferences    UserPreferences?
+
+  @@map("users")
+}
+
+model Category {
+  id    String @id @default(cuid())
+  label String
+  icon  String
+  color String
+
+  ideas       Idea[]
+  votingRules VotingRule[]
+
+  @@map("categories")
+}
+
+model Status {
+  id          String  @id @default(cuid())
+  label       String
+  color       String
+  bg          String
+  order       Int
+  description String
+  isSystem    Boolean @default(false) @map("is_system")
+
+  ideas   Idea[]
+  surveys Survey[] @relation("SurveyTargetStatus")
+
+  @@map("statuses")
+}
+
+model Sprint {
+  id        String   @id @default(cuid())
+  label     String
+  startDate DateTime @map("start_date")
+  endDate   DateTime @map("end_date")
+  isCurrent Boolean  @default(false) @map("is_current")
+
+  ideas   Idea[]
+  surveys Survey[] @relation("SurveyTargetSprint")
+
+  @@map("sprints")
+}
+
+model Idea {
+  id           String   @id @default(cuid())
+  title        String
+  summary      String
+  content      String
+  categoryId   String   @map("category_id")
+  statusId     String   @map("status_id")
+  authorId     String   @map("author_id")
+  sprintId     String?  @map("sprint_id")
+  upvotes      Int      @default(0)
+  downvotes    Int      @default(0)
+  commentCount Int      @default(0) @map("comment_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  category    Category     @relation(fields: [categoryId], references: [id])
+  status      Status       @relation(fields: [statusId], references: [id])
+  author      User         @relation(fields: [authorId], references: [id])
+  sprint      Sprint?      @relation(fields: [sprintId], references: [id])
+  votes         Vote[]
+  comments      Comment[]
+  attachments   Attachment[]
+  surveys       Survey[]
+  surveyOptions SurveyOption[]
+
+  @@index([categoryId])
+  @@index([statusId])
+  @@index([sprintId])
+  @@index([authorId])
+  @@index([createdAt])
+  @@map("ideas")
+}
+
+model Vote {
+  id     String   @id @default(cuid())
+  ideaId String   @map("idea_id")
+  userId String   @map("user_id")
+  type   VoteType
+
+  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([ideaId, userId])
+  @@map("votes")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  ideaId    String   @map("idea_id")
+  userId    String   @map("user_id")
+  content   String
+  parentId  String?  @map("parent_id")
+  likeCount Int      @default(0) @map("like_count")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  idea    Idea          @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent  Comment?      @relation("CommentReplies", fields: [parentId], references: [id])
+  replies Comment[]     @relation("CommentReplies")
+  likes   CommentLike[]
+
+  @@index([ideaId])
+  @@map("comments")
+}
+
+model CommentLike {
+  id        String @id @default(cuid())
+  commentId String @map("comment_id")
+  userId    String @map("user_id")
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@map("comment_likes")
+}
+
+model Attachment {
+  id           String  @id @default(cuid())
+  ideaId       String? @map("idea_id")
+  uploadedById String? @map("uploaded_by_id")
+  filename     String
+  url          String
+  mimeType     String  @map("mime_type")
+  size         Int
+
+  idea       Idea? @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@map("attachments")
+}
+
+model Survey {
+  id                String     @id @default(cuid())
+  title             String
+  question          String
+  type              SurveyType
+  ideaId            String?    @map("idea_id")
+  createdById       String     @map("created_by_id")
+  isActive          Boolean    @default(true) @map("is_active")
+  targetDepartments String[]   @map("target_departments")
+  dueDate           DateTime?  @map("due_date")
+  autoTransition    Boolean    @default(false) @map("auto_transition")
+  targetStatusId    String?    @map("target_status_id")
+  targetSprintId    String?    @map("target_sprint_id")
+  transitionedAt    DateTime?  @map("transitioned_at")
+  createdAt         DateTime   @default(now()) @map("created_at")
+
+  idea         Idea?          @relation(fields: [ideaId], references: [id])
+  createdBy    User           @relation("SurveyCreator", fields: [createdById], references: [id])
+  targetStatus Status?        @relation("SurveyTargetStatus", fields: [targetStatusId], references: [id])
+  targetSprint Sprint?        @relation("SurveyTargetSprint", fields: [targetSprintId], references: [id])
+  options      SurveyOption[]
+  ratings      SurveyRating[]
+
+  @@map("surveys")
+}
+
+model SurveyOption {
+  id       String  @id @default(cuid())
+  surveyId String  @map("survey_id")
+  label    String
+  ideaId   String? @map("idea_id")
+
+  survey Survey       @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  idea   Idea?        @relation(fields: [ideaId], references: [id])
+  votes  SurveyVote[]
+
+  @@map("survey_options")
+}
+
+model SurveyVote {
+  id       String @id @default(cuid())
+  optionId String @map("option_id")
+  userId   String @map("user_id")
+
+  option SurveyOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([optionId, userId])
+  @@map("survey_votes")
+}
+
+model SurveyRating {
+  id       String @id @default(cuid())
+  surveyId String @map("survey_id")
+  userId   String @map("user_id")
+  rating   Int
+
+  survey Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([surveyId, userId])
+  @@map("survey_ratings")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  message   String
+  read      Boolean          @default(false)
+  relatedId String?          @map("related_id")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model UserPreferences {
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+
+  notifyAppComment  Boolean @default(true)  @map("notify_app_comment")
+  notifyAppVote     Boolean @default(true)  @map("notify_app_vote")
+  notifyAppStatus   Boolean @default(true)  @map("notify_app_status")
+  notifyAppSurvey   Boolean @default(true)  @map("notify_app_survey")
+
+  notifyEmailComment Boolean @default(false) @map("notify_email_comment")
+  notifyEmailVote    Boolean @default(false) @map("notify_email_vote")
+  notifyEmailStatus  Boolean @default(false) @map("notify_email_status")
+  notifyEmailSurvey  Boolean @default(false) @map("notify_email_survey")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model AppSettings {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
+model VotingRule {
+  id         String  @id @default(cuid())
+  categoryId String? @map("category_id")
+  department String?
+  multiplier Float   @default(1.0)
+  isActive   Boolean @default(true) @map("is_active")
+
+  category Category? @relation(fields: [categoryId], references: [id])
+
+  @@map("voting_rules")
+}

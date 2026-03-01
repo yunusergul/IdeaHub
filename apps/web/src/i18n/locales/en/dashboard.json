@@ -1,0 +1,11 @@
+{
+  "title": "Ideas",
+  "ideasListed": "{{count}} ideas listed",
+  "thisWeek": "+{{count}} new ideas this week",
+  "loadingIdeas": "Loading ideas...",
+  "sortBy": "Sort: {{label}}",
+  "newest": "Newest",
+  "oldest": "Oldest",
+  "mostVoted": "Most Voted",
+  "mostCommented": "Most Commented"
+}

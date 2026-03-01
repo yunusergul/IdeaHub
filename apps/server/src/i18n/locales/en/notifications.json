@@ -1,0 +1,6 @@
+{
+  "statusChanged": "Your idea's status has been updated to \"{{status}}\"",
+  "newComment": "{{name}} commented on your idea \"{{title}}\"",
+  "newVote": "{{name}} liked your idea \"{{title}}\"",
+  "newSurvey": "New survey: {{title}}"
+}
